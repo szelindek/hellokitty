@@ -1,9 +1,37 @@
-#/usr/bin/python3
+#!/usr/bin/python3
+
+# cursor hotspot configure
+# test load_text, try-except: only except for defined exceptions!
+# script to rename every resource to all lowercase letters
+#
 
 import os, pygame
 
+_pygame_init_called = False
+
 _font_dir = "fonts"
 _image_dir = "images"
+
+_sound_lib = {}
+_music_lib = {}
+_image_lib = {}
+_font_lib = {}
+_text_lib = {}
+
+_key_lib = {
+    "left":  pygame.K_LEFT,
+    "right": pygame.K_RIGHT,
+    "jump":  pygame.K_UP,
+    "duck":  pygame.K_DOWN
+}
+_color_lib = {
+    "white":  (255, 255, 255),
+    "black":  (0, 0, 0),
+    "red":    (255, 0, 0),
+    "green":  (0, 255, 0),
+    "blue":   (0, 0, 255),
+    "orange": (255, 171, 24)
+}
 
 class SceneBase:
     def __init__(self):
@@ -28,84 +56,116 @@ class SceneBase:
     def Terminate(self):
         self.SwitchToScene(None)
 
-_sound_lib = {}
-def play_sound(path):
-    global _sound_lib
-    path = path.replace('/', os.sep).replace('\\', os.sep)
-    sound = _sound_lib.get(path)
-    if sound == None:
-        sound = pygame.mixer.Sound(path)
-        _sound_lib[path] = sound
-    sound.play()
-
-_music_lib = {}
-def play_music(path):
-    global _music_lib
-    path = path.replace('/', os.sep).replace('\\', os.sep)
-    music = _music_lib.get(path)
-    if music == None:
-        music = pygame.mixer.music.load(path)
-        _music_lib[path] = music
-    pygame.mixer.music.play()
-
-_image_lib = {}
-def load_image(path):
-    global _image_lib
+def load_media(path, library):
     path = path.lower().replace('/', os.sep).replace('\\', os.sep)
-    image = _image_lib.get(path)
-    if image == None:
-        image = pygame.image.load(path)
-        _image_lib[path] = image
-    return image
+    media = library.get(path)
+    if media == None:
+        if library is _sound_lib:
+            media = pygame.mixer.Sound(path)
+        elif library is _music_lib:
+            media = pygame.mixer.music.load(path)
+        elif library is _image_lib:
+            media = pygame.image.load(path)
+        else:
+            raise("Unknown media library: ", library)
+        library[path] = media
+    if library is _sound_lib:
+        sound.play()
+        return None
+    elif library is _music_lib:
+        pygame.mixer.music.play()
+        return None
+    elif library is _image_lib:
+        return media
+    else:
+        raise("Unknown media library: ", library)
 
-_cached_fonts = {}
-def get_font(fonts, size):
-    global _cached_fonts
-    key = str(fonts) + '|' + str(size)
-    font = _cached_fonts.get(key, None)
-    if font == None:
+def load_sound(path):
+    return load_media(path, _sound_lib)
+
+def load_music(path):
+    return load_media(path, _music_lib)
+
+def load_image(path):
+    return load_media(path, _image_lib)
+
+def load_font(font, size):
+    global _font_lib
+    key = str(font) + '|' + str(size)
+    font_object = _font_lib.get(key, None)
+    if font_object == None:
         try:
-            font = pygame.font.Font(fonts, size)
+            font_object = pygame.font.Font(font, size)
         except:
-            font = pygame.font.SysFont("", size)
-            print("Desired font (",fonts,") not found! Using system default font.")
-        _cached_fonts[key] = font
-    return font
+            font_object = pygame.font.SysFont("", size)
+            print("Desired font (",font,") not found! Using system default font.")
+        _font_lib[key] = font_object
+    return font_object
 
-_cached_text = {}
-def create_text(text, fonts, size, color):
-    global _cached_text, _font_dir
-    fonts = os.path.join(_font_dir, fonts)
-    key = '|'.join(map(str, (fonts, size, color, text)))
-    image = _cached_text.get(key, None)
-    if image == None:
-        font = get_font(fonts, size)
-        image = font.render(text, True, color)
-        _cached_text[key] = image
-    return image
+def load_text(text, font, size, color):
+    global _text_lib, _font_dir
+    font = os.path.join(_font_dir, font)
+    key = '|'.join(map(str, (font, size, color, text)))
+    font_rendered = _text_lib.get(key, None)
+    if font_rendered == None:
+        font_object = load_font(font, size)
+        font_rendered = font_object.render(text, True, color)
+        _text_lib[key] = font_rendered
+    return font_rendered
 
 def get_center(max_size, act_size):
     return max_size // 2 - act_size // 2
 
-pygame_init_called = False
-_key_lib = {
-    "left":  pygame.K_LEFT,
-    "right": pygame.K_RIGHT,
-    "jump":  pygame.K_UP,
-    "down":  pygame.K_DOWN
-}
-_color_lib = {
-    "white":  (255, 255, 255),
-    "black":  (0, 0, 0),
-    "red":    (255, 0, 0),
-    "green":  (0, 255, 0),
-    "blue":   (0, 0, 255),
-    "orange": (255, 171, 24)
-}
-def run_game(width, height, fps, starting_scene):
+class TitleScene(SceneBase):
+    title_font = "fff_tusj.ttf"
+    text = ""
+
+    def __init__(self):
+        SceneBase.__init__(self)
+        global _pygame_init_called
+        if _pygame_init_called:
+            pygame.mouse.set_visible(True)
+        print("Inited TitleScene")
+
+    def ProcessInput(self, events, pressed_keys):
+        for event in events:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                # Move to the next scene when the user pressed Enter
+                self.SwitchToScene(GameScene())
+
+    def Update(self):
+        pass
+
+    def Render(self, screen):
+        global _color_lib, _pygame_init_called
+        screen.fill(_color_lib["orange"])
+        if _pygame_init_called:
+            self.text = load_text("Bunny hop", self.title_font, 72, _color_lib["black"])
+            screen.blit(self.text,(get_center(screen.get_width(), self.text.get_width()), 0))
+
+class GameScene(SceneBase):
+    def __init__(self):
+        SceneBase.__init__(self)
+        pygame.mouse.set_visible(False)
+        print("Inited GameScene")
+
+    def ProcessInput(self, events, pressed_keys):
+        for event in events:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                # Move back to title scene when escape is pressed
+                self.SwitchToScene(TitleScene())
+
+    def Update(self):
+        pass
+
+    def Render(self, screen):
+        global _color_lib
+        screen.fill(_color_lib["blue"])
+
+def main(width, height, fps, starting_scene):
     pygame.init()
-    global pygame_init_called
-    pygame_init_called = True
+    global _pygame_init_called
+    _pygame_init_called = True
 
     cursor_string = (
         "            XXXX   XXXX ",
@@ -177,52 +237,5 @@ def run_game(width, height, fps, starting_scene):
         pygame.display.flip()
         clock.tick(fps)
 
-class TitleScene(SceneBase):
-    title_font = "fff_tusj.ttf"
-    text = ""
-
-    def __init__(self):
-        SceneBase.__init__(self)
-        global pygame_init_called
-        if pygame_init_called:
-            pygame.mouse.set_visible(True)
-        print("Inited TitleScene")
-
-    def ProcessInput(self, events, pressed_keys):
-        for event in events:
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-                # Move to the next scene when the user pressed Enter
-                self.SwitchToScene(GameScene())
-
-    def Update(self):
-        pass
-
-    def Render(self, screen):
-        global _color_lib, pygame_init_called
-        screen.fill(_color_lib["orange"])
-        if pygame_init_called:
-            self.text = create_text("Bunny hop", self.title_font, 72, _color_lib["black"])
-            screen.blit(self.text,(get_center(screen.get_width(), self.text.get_width()), 0))
-
-class GameScene(SceneBase):
-    def __init__(self):
-        SceneBase.__init__(self)
-        pygame.mouse.set_visible(False)
-        print("Inited GameScene")
-
-    def ProcessInput(self, events, pressed_keys):
-        for event in events:
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                # Move back to title scene when escape is pressed
-                self.SwitchToScene(TitleScene())
-
-    def Update(self):
-        pass
-
-    def Render(self, screen):
-        global _color_lib
-        screen.fill(_color_lib["blue"])
-
-
 # Execute main function only after the whole script was parsed
-run_game(640, 360, 60, TitleScene())
+main(640, 360, 60, TitleScene())
