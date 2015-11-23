@@ -7,8 +7,6 @@
 
 import os, pygame
 
-_pygame_init_called = False
-
 _font_dir = "fonts"
 _image_dir = "images"
 
@@ -32,6 +30,10 @@ _color_lib = {
     "blue":   (0, 0, 255),
     "orange": (255, 171, 24)
 }
+
+menu_title = "Bunny hop"
+menu_items = (menu_title, "Start game", "Options", "Quit")
+screen = ""
 
 class SceneBase:
     def __init__(self):
@@ -117,15 +119,37 @@ def get_center(max_size, act_size):
     return max_size // 2 - act_size // 2
 
 class TitleScene(SceneBase):
-    title_font = "fff_tusj.ttf"
-    text = ""
-
     def __init__(self):
+        global _color_lib, menu_title, menu_items, screen
+
         SceneBase.__init__(self)
-        global _pygame_init_called
-        if _pygame_init_called:
-            pygame.mouse.set_visible(True)
-        print("Inited TitleScene")
+        pygame.mouse.set_visible(True)
+
+        self.font = "fff_tusj.ttf"
+        self.color = _color_lib["black"]
+        self.title_size = 72
+        self.item_size = 50
+        self.items = []
+
+        # Create and store menu items
+        screen_tenth = screen.get_height() // 50
+        for index, item in enumerate(menu_items):
+            needed_size = self.item_size
+            if item == menu_title:
+                needed_size = self.title_size
+
+            self.text = load_text(item, self.font, needed_size, self.color)
+
+            width = self.text.get_width()
+            height = self.text.get_height()
+
+            posx = get_center(screen.get_width(), width)
+            # "len(menu_items) * height": total height of text block
+            posy = get_center(screen.get_height(), (len(menu_items) * height)) + (index * height)
+            if item == menu_title:
+                posy = 0
+
+            self.items.append([item, self.text, (width, height), (posx, posy + screen_tenth)])
 
     def ProcessInput(self, events, pressed_keys):
         for event in events:
@@ -136,18 +160,18 @@ class TitleScene(SceneBase):
     def Update(self):
         pass
 
-    def Render(self, screen):
-        global _color_lib, _pygame_init_called
+    def Render(self):
+        global _color_lib, screen
+
         screen.fill(_color_lib["orange"])
-        if _pygame_init_called:
-            self.text = load_text("Bunny hop", self.title_font, 72, _color_lib["black"])
-            screen.blit(self.text,(get_center(screen.get_width(), self.text.get_width()), 0))
+
+        for name, label, (width, height), (posx, posy) in self.items:
+            screen.blit(label, (posx, posy))
 
 class GameScene(SceneBase):
     def __init__(self):
         SceneBase.__init__(self)
         pygame.mouse.set_visible(False)
-        print("Inited GameScene")
 
     def ProcessInput(self, events, pressed_keys):
         for event in events:
@@ -158,15 +182,16 @@ class GameScene(SceneBase):
     def Update(self):
         pass
 
-    def Render(self, screen):
-        global _color_lib
+    def Render(self):
+        global _color_lib, screen
         screen.fill(_color_lib["blue"])
 
-def main(width, height, fps, starting_scene):
-    pygame.init()
-    global _pygame_init_called
-    _pygame_init_called = True
+def main(width, height, fps):
+    global menu_items, screen
 
+    pygame.init()
+
+    # Create new cursor from 'cursor_string', where the hotspot is (23,0)
     cursor_string = (
         "            XXXX   XXXX ",
         "           XX..XX XX..XX",
@@ -194,19 +219,16 @@ def main(width, height, fps, starting_scene):
         "XXXX                    ")
     cursor, mask = pygame.cursors.compile(cursor_string, 'X', '.', 'O')
     cursor_size = len(cursor_string[0]), len(cursor_string)
-    # Create new cursor from 'cursor_string', where the hotspot is (0,0)
-    pygame.mouse.set_cursor(cursor_size, (0,0), cursor, mask)
+    pygame.mouse.set_cursor(cursor_size, (23,0), cursor, mask)
 
+    # Create graphical window
     pygame.display.set_caption("Bunny hop")
     pygame.display.set_icon(load_image(os.path.join(_image_dir,"bunny_256.png")))
     screen = pygame.display.set_mode((width, height))
     #screen = pygame.display.set_mode((width, height),pygame.FULLSCREEN)
 
     clock = pygame.time.Clock()
-
-    active_scene = starting_scene
-
-    print ("Starting while loop")
+    active_scene = TitleScene()
 
     while active_scene != None:
         pressed_keys = pygame.key.get_pressed()
@@ -225,12 +247,13 @@ def main(width, height, fps, starting_scene):
 
             if quit_attempt:
                 active_scene.Terminate()
+                break
             else:
                 filtered_events.append(event)
 
         active_scene.ProcessInput(filtered_events, pressed_keys)
         active_scene.Update()
-        active_scene.Render(screen)
+        active_scene.Render()
 
         active_scene = active_scene.next
 
@@ -238,4 +261,4 @@ def main(width, height, fps, starting_scene):
         clock.tick(fps)
 
 # Execute main function only after the whole script was parsed
-main(640, 360, 60, TitleScene())
+main(640, 360, 60)
