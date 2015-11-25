@@ -1,11 +1,18 @@
 #!/usr/bin/python3
 
-# cursor hotspot configuration
-# TEST load_text -> print when rendering new font and new text
-#   and check while going to GameScene and back, OptionsScene and back
-# TEST quit methods from main() -> Terminate() not needed?
-# script to rename every resource to all lowercase letters
-# "are you sure, you want to quit" window as child process, which returns bool
+# TEST load_text:
+#   -> print when rendering new font and new text and check while going to 
+#      GameScene and back, OptionsScene and back
+# TEST next_scene init:
+#   -> does it really work?
+#   -> is it needed to delete prev scene or GC does it?
+#   -> collect existing scenes dynamically (inherited from Base)
+#   -> allow only one instance from each scene
+
+# range_lo and range_hi for printing lists: range_lo == offset
+
+# "are you sure, you want to quit" window as subprocess, which returns bool
+# Subprocess module, "communicate()[0]" popup ablakhoz, külön script return érték olvasás
 
 import os
 import sys
@@ -63,17 +70,16 @@ _color_lib = {
     "darkorchid":   (153, 50, 204),
     "darkviolet":   (148, 0, 211),
     "deeppink":     (255, 20, 147),
-    "skyblue":      (0, 191, 255),    
+    "skyblue":      (0, 191, 255),
     "forest":       (34, 139, 34),
     "indigo":       (75, 0, 130)
 }
 
-menu_title = "Bunny hop"
-menu_items = (menu_title, "Start game", "Options", "Quit")
-menu_actions = (("",""), ("SwitchToScene", "GameScene"), ("SwitchToScene", "OptionsScene"), ("Terminate", ""))
-option_title = "Options"
-option_items = (option_title, "Resolution", "Fullscreen", "Keys", "Mute sounds")
-screen = ""
+# Items of the main menu: tuples of label of the menu item and the scene
+# connected to it
+_menu_items = (("Bunny hop", "TitleScene"), ("Start game", "GameScene"), \
+               ("Options", "OptionsScene"), ("Quit", ""))
+_option_items = ("Options", "Resolution", "Fullscreen", "Keys", "Mute sounds")
 
 def load_media(path, library):
     path = path.lower().replace('/', os.sep).replace('\\', os.sep)
@@ -149,8 +155,8 @@ class MenuItem:
         self.posx = 0
         self.posy = 0
 
-        self.action, self.args = action
-        
+        self.action = action
+
     def SetPos(self, posx, posy):
         self.posx = posx
         self.posy = posy
@@ -163,13 +169,14 @@ class MenuItem:
         return False
 
 class SceneBase:
-    def __init__(self):
-        self.next = self
+    def __init__(self, screen):
+        pass
 
     def ProcessInput(self, events, pressed_keys):
         """Receives all events occured since last frame and
            keys being currently pressed. React to them here."""
         print("Forget to override this in the child class!")
+        return self.__class__.__name__
 
     def Update(self):
         """Game logic: updating flags and variables, move sprites."""
@@ -179,17 +186,11 @@ class SceneBase:
         """Update screen, render new frame and show to the user."""
         print("Forget to override this in the child class!")
 
-    def SwitchToScene(self, next_scene):
-        self.next = next_scene
-
-    def Terminate(self):
-        sys.exit()
-
 class TitleScene(SceneBase):
-    def __init__(self):
-        global _color_lib, menu_title, menu_items, screen
+    def __init__(self, screen):
+        global _color_lib, _menu_items
 
-        SceneBase.__init__(self)
+        SceneBase.__init__(self, screen)
         pygame.mouse.set_visible(True)
 
         self.font = "fff_tusj.ttf"
@@ -198,7 +199,7 @@ class TitleScene(SceneBase):
         self.font_color = _color_lib["black"]
         self.items = []
         self.cur_item = None
-        
+
         # For the aesthetical layout, we add a spacing before the title
         # and between the menu options
         spacing = screen.get_height() // 50
@@ -208,22 +209,25 @@ class TitleScene(SceneBase):
         # between the menu items
         offset = spacing
         # Exclude the title from the count of menu items
-        item_cnt = len(menu_items)-1
+        item_cnt = len(_menu_items)-1
 
         # Create and store menu items
-        for index, name in enumerate(menu_items):
+        for index, element in enumerate(_menu_items):
+            name = element[0]
+            scene = element[1]
+
             # Render the text for current item
             font_size = self.item_font_size
-            if name == menu_title:
+            if index == 0:
                 font_size = self.title_font_size
-            label = MenuItem(name, self.font, font_size, self.font_color, menu_actions[index])
+            label = MenuItem(name, self.font, font_size, self.font_color, scene)
 
             # Center horizontally on the screen, and init vertical position
             # with the current offset
             posx = get_center(screen.get_width(), label.width)
             posy = offset
-            
-            if name == menu_title:
+
+            if index == 0:
                 # Increase offset for other menu items
                 offset += label.height + spacing * (item_cnt-1)
             else :
@@ -231,7 +235,7 @@ class TitleScene(SceneBase):
                 # the height of each menu item virtually increased with the spacing,
                 # and index is decremented, because the title is excluded from indexing
                 posy += get_center((screen.get_height() - offset), (item_cnt * (label.height + spacing))) + ((index-1) * (label.height + spacing))
-            
+
             # Update label position and store label
             label.SetPos(posx, posy)
             self.items.append(label)
@@ -239,21 +243,20 @@ class TitleScene(SceneBase):
     def ProcessInput(self, events, pressed_keys):
         for event in events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-                # Move to the next scene when the user pressed Enter
-                self.SwitchToScene(GameScene())
+                # Move to the game scene as a test
+                return "GameScene"
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for label in self.items:
                     if label.IsMouseHovered(pygame.mouse.get_pos()):
                         print(label.action)
-                        print(label.args)
-                        #func = getattr(TitleScene, label.action)
-                        #func(self,label.args)
+                        return label.action
+        return self.__class__.__name__
 
     def Update(self):
         pass
 
-    def Render(self):
-        global _color_lib, screen
+    def Render(self, screen):
+        global _color_lib
 
         screen.fill(_color_lib["orange"])
 
@@ -262,75 +265,46 @@ class TitleScene(SceneBase):
             pygame.draw.rect(screen, _color_lib["dark_green"], pygame.Rect(label.posx, label.posy, label.width, label.height),1)
 
 class OptionsScene(SceneBase):
-    def __init__(self):
-        global _color_lib, option_title, option_items, screen
-
-        SceneBase.__init__(self)
+    def __init__(self, screen):
+        SceneBase.__init__(self, screen)
         pygame.mouse.set_visible(True)
-
-        self.font = "fff_tusj.ttf"
-        self.title_font_size = 72
-        self.item_font_size = 36
-        self.font_color = _color_lib["grey"]
-        self.items = []
-        self.cur_item = None
-
-        # Create and store option items
-        for index, name in enumerate(option_items):
-            # Render the text for current item
-            font_size = self.item_font_size
-            if name == option_title:
-                font_size = self.title_font_size
-            label = MenuItem(name, self.font, font_size, self.font_color, "")
-
-            # Calculate position of label on the screen
-            posx = get_center(screen.get_width(), label.width)
-            posy = get_center(screen.get_height(), (len(option_items) * label.height)) + (index * label.height)
-            if name == option_title:
-                posy = 0
-            # Add a little spacing between the labels
-            posy = posy + screen.get_height() // 50
-
-            # Update label position and store label
-            label.SetPos(posx, posy)
-            self.items.append(label)
 
     def ProcessInput(self, events, pressed_keys):
         for event in events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 # Move back to title scene when escape is pressed
-                self.SwitchToScene(TitleScene())
+                return "TitleScene"
+        return self.__class__.__name__
 
     def Update(self):
         pass
 
-    def Render(self):
-        global _color_lib, screen
+    def Render(self, screen):
+        global _color_lib
 
         screen.fill(_color_lib["forest"])
 
 class GameScene(SceneBase):
-    def __init__(self):
-        SceneBase.__init__(self)
+    def __init__(self, screen):
+        SceneBase.__init__(self, screen)
         pygame.mouse.set_visible(False)
 
     def ProcessInput(self, events, pressed_keys):
         for event in events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 # Move back to title scene when escape is pressed
-                self.SwitchToScene(TitleScene())
+                return "TitleScene"
+        return self.__class__.__name__
 
     def Update(self):
         pass
 
-    def Render(self):
-        global _color_lib, screen
+    def Render(self, screen):
+        global _color_lib
 
         screen.fill(_color_lib["blue"])
 
 def main(width, height, fps):
-    global screen
-
     pygame.init()
 
     # Create new cursor from 'cursor_string', where the hotspot is (23,0)
@@ -369,7 +343,7 @@ def main(width, height, fps):
     screen = pygame.display.set_mode((width, height))
 
     clock = pygame.time.Clock()
-    active_scene = TitleScene()
+    active_scene = TitleScene(screen)
 
     while True:
         filtered_events = []
@@ -384,11 +358,18 @@ def main(width, height, fps):
             else:
                 filtered_events.append(event)
 
-        active_scene.ProcessInput(filtered_events, pressed_keys)
-        active_scene.Update()
-        active_scene.Render()
-
-        active_scene = active_scene.next
+        next_scene = active_scene.ProcessInput(filtered_events, pressed_keys)
+        if next_scene == "":
+            # If the returned scene name is empty, break the main loop and exit
+            break
+        elif next_scene == active_scene.__class__.__name__ :
+            # Don't need to change scene, we can continue normally
+            active_scene.Update()
+            active_scene.Render(screen)
+        else:
+            # Initialize new scene from string
+            active_scene = globals()[next_scene](screen)
+            print("NEW SCENE: ", active_scene)
 
         pygame.display.flip()
         clock.tick(fps)
