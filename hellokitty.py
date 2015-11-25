@@ -1,14 +1,5 @@
 #!/usr/bin/python3
 
-# TEST load_text:
-#   -> print when rendering new font and new text and check while going to 
-#      GameScene and back, OptionsScene and back
-# TEST next_scene init:
-#   -> does it really work?
-#   -> is it needed to delete prev scene or GC does it?
-#   -> collect existing scenes dynamically (inherited from Base)
-#   -> allow only one instance from each scene
-
 # range_lo and range_hi for printing lists: range_lo == offset
 
 # "are you sure, you want to quit" window as subprocess, which returns bool
@@ -142,7 +133,7 @@ def get_center(max_size, act_size):
     return max_size // 2 - act_size // 2
 
 class MenuItem:
-    def __init__(self, name, font, font_size, font_color, action):
+    def __init__(self, name, font, font_size, font_color, action=""):
         self.name = name
         self.font = font
         self.font_size = font_size
@@ -248,11 +239,10 @@ class TitleScene(SceneBase):
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for label in self.items:
                     if label.IsMouseHovered(pygame.mouse.get_pos()):
-                        print(label.action)
                         return label.action
         return self.__class__.__name__
 
-    def Update(self):
+    def Update(self, screen):
         pass
 
     def Render(self, screen):
@@ -262,7 +252,6 @@ class TitleScene(SceneBase):
 
         for label in self.items:
             screen.blit(label.text, (label.posx, label.posy))
-            pygame.draw.rect(screen, _color_lib["dark_green"], pygame.Rect(label.posx, label.posy, label.width, label.height),1)
 
 class OptionsScene(SceneBase):
     def __init__(self, screen):
@@ -276,7 +265,7 @@ class OptionsScene(SceneBase):
                 return "TitleScene"
         return self.__class__.__name__
 
-    def Update(self):
+    def Update(self, screen):
         pass
 
     def Render(self, screen):
@@ -284,25 +273,82 @@ class OptionsScene(SceneBase):
 
         screen.fill(_color_lib["forest"])
 
+        label = MenuItem("The cake is a lie!", "fff_tusj.ttf", 72, _color_lib["white"])
+        posx = get_center(screen.get_width(), label.width)
+        posy = get_center(screen.get_height(), label.height)
+        label.SetPos(posx, posy)
+        screen.blit(label.text, (label.posx, label.posy))
+
+class Bunny:
+    def __init__(self, posx, posy):
+        global _image_dir
+
+        scaled_width = 40
+
+        self.look = load_image(os.path.join(_image_dir,"bunny_look.png"))
+        self.look = pygame.transform.flip(self.look, True, False)
+        self.facing_right = True
+        self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(1.5*scaled_width)))
+        self.posx = posx
+        self.posy = posy
+        self.width = self.look.get_width()
+        self.height = self.look.get_height()
+
+    def move(self, posx_delta, posy_delta):
+        self.posx += posx_delta
+        self.posy += posy_delta
+
+        # If moving left but facing right, or moving right but facing left,
+        # then flip the bunny look, to face in the direction of the movement
+        if (posx_delta < 0 and self.facing_right == True) or \
+           (posx_delta > 0 and self.facing_right == False):
+            self.look = pygame.transform.flip(self.look, True, False)
+            self.facing_right = not self.facing_right
+
+    def force_boundaries(self, screen):
+        if self.posx < 0:
+            self.posx = 0
+        elif self.posx > screen.get_width() - self.width:
+            self.posx = screen.get_width() - self.width
+        if self.posy < 0:
+            self.posy = 0
+        elif self.posy > screen.get_height() - self.height:
+            self.posy = screen.get_height() - self.height
+
 class GameScene(SceneBase):
     def __init__(self, screen):
         SceneBase.__init__(self, screen)
         pygame.mouse.set_visible(False)
 
+        self.bunny = Bunny(screen.get_width() // 20, \
+                           screen.get_height() - (screen.get_height() // 3))
+
     def ProcessInput(self, events, pressed_keys):
+        global _key_lib
+
         for event in events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 # Move back to title scene when escape is pressed
                 return "TitleScene"
+            elif event.type == pygame.KEYDOWN and event.key == _key_lib["left"]:
+                self.bunny.move(-10,0)
+            elif event.type == pygame.KEYDOWN and event.key == _key_lib["right"]:
+                self.bunny.move(10,0)
+            elif event.type == pygame.KEYDOWN and event.key == _key_lib["jump"]:
+                self.bunny.move(0,-10)
+            elif event.type == pygame.KEYDOWN and event.key == _key_lib["duck"]:
+                self.bunny.move(0,10)
         return self.__class__.__name__
 
-    def Update(self):
-        pass
+    def Update(self, screen):
+        self.bunny.force_boundaries(screen)
 
     def Render(self, screen):
         global _color_lib
 
-        screen.fill(_color_lib["blue"])
+        screen.fill(_color_lib["royalblue"])
+        pygame.draw.rect(screen, _color_lib["neon"], pygame.Rect(self.bunny.posx, self.bunny.posy, self.bunny.width, self.bunny.height),1)
+        screen.blit(self.bunny.look, (self.bunny.posx, self.bunny.posy))
 
 def main(width, height, fps):
     pygame.init()
@@ -364,12 +410,11 @@ def main(width, height, fps):
             break
         elif next_scene == active_scene.__class__.__name__ :
             # Don't need to change scene, we can continue normally
-            active_scene.Update()
+            active_scene.Update(screen)
             active_scene.Render(screen)
         else:
             # Initialize new scene from string
             active_scene = globals()[next_scene](screen)
-            print("NEW SCENE: ", active_scene)
 
         pygame.display.flip()
         clock.tick(fps)
