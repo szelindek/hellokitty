@@ -1,139 +1,63 @@
 #!/usr/bin/python3
+r"""
 
-# range_lo and range_hi for printing lists: range_lo == offset
+util_chimpy:
+    derive from Sprite class
+    create RenderPlain==Group class -> sprite handling easier
+    use Rect class for (posx, posy, width, height)
+util_functions:
+    keyboard control for menu
 
-# "are you sure, you want to quit" window as subprocess, which returns bool
-# Subprocess module, "communicate()[0]" popup ablakhoz, külön script return érték olvasás
+defaults for optional parameters (like screen for Update()
+
+react to pressed_keys instead of KEYDOWN -> continouos movement
+solve race situation (where left and right pressed the same time)
+    do not stop current movement until current key is released
+
+store image of the background
+movement:
+    replace all to-be-moved objects on screen with background (blitting)
+    calculate object movement
+    blit all moving objects at their new position
+    use display.update(rect_list_to_update) to refresh only changed parts of the screen
+
+detect display resolution and collect possible resolutions:
+    pygame.display.list_modes() -> all possible resolutions
+    pygame.display.Info() -> display info object
+        wm: if false, then only fullscreen is allowed (no windowed mode)
+        current_w, current_h: current resolution
+    pygame.display.get_wm_info() -> windowed mode info list
+
+range_lo and range_hi for printing lists: range_lo == offset
+
+include sub_main content here as function, and use ask.py to pop up message and
+    enable keys (enter selects active answer, default active yes, can move with keys)
+
+Physics:
+    RK4 integrator
+    fixed time-step
+    inputs apply forces
+
+TEST:
+
+
+"""
 
 import os
 import sys
 import pygame
-
-_font_dir = "fonts"
-_image_dir = "images"
-
-_sound_lib = {}
-_music_lib = {}
-_image_lib = {}
-_font_lib = {}
-_text_lib = {}
-
-_key_lib = {
-    "left":  pygame.K_LEFT,
-    "right": pygame.K_RIGHT,
-    "jump":  pygame.K_UP,
-    "duck":  pygame.K_DOWN
-}
-#http://www.psyclops.com/tools/rgb/
-_color_lib = {
-    "black":        (0, 0, 0),
-    "dark_red":     (128, 0, 0),
-    "red":          (255, 0, 0),
-    "dark_green":   (0, 128, 0),
-    "green":        (0, 255, 0),
-    "dark_blue":    (0, 0, 128),
-    "blue":         (0, 0, 255),
-    "dark_yellow":  (128, 128, 0),
-    "yellow":       (255, 255, 0),
-    "light_yellow": (255, 255, 128),
-    "dark_pink":    (128, 0, 128),
-    "pink":         (255, 0, 255),
-    "light_pink":   (255, 128, 255),
-    "dark_cyan":    (0, 128, 128),
-    "cyan":         (0, 255, 255),
-    "light_cyan":   (128, 255, 255),
-    "grey":         (128, 128, 128),
-    "white":        (255, 255, 255),
-    "orange":       (255, 128, 0),
-    "magenta":      (255, 0, 128),
-    "neon":         (128, 255, 0),
-    "spring":       (0, 255, 128),
-    "purple":       (128, 0, 255),
-    "royalblue":    (0, 128, 255),
-    "light_purple": (128, 128, 255),
-    "light_neon":   (128, 255, 128),
-    "peach":        (255, 128, 128),
-    "beige":        (245, 245, 220),
-    "blueviolet":   (138, 43, 226),
-    "brown":        (180, 80, 40),
-    "crimson":      (220, 20, 60),
-    "darkolive":    (85, 107, 47),
-    "darkorchid":   (153, 50, 204),
-    "darkviolet":   (148, 0, 211),
-    "deeppink":     (255, 20, 147),
-    "skyblue":      (0, 191, 255),
-    "forest":       (34, 139, 34),
-    "indigo":       (75, 0, 130)
-}
+import subprocess
+from mycommon import *
 
 # Items of the main menu: tuples of label of the menu item and the scene
 # connected to it
-_menu_items = (("Bunny hop", "TitleScene"), ("Start game", "GameScene"), \
+_menu_items = (("Bunny hop", "TitleScene"), ("Start game", "GameScene"),
                ("Options", "OptionsScene"), ("Quit", ""))
 _option_items = ("Options", "Resolution", "Fullscreen", "Keys", "Mute sounds")
 
-def load_media(path, library):
-    path = path.lower().replace('/', os.sep).replace('\\', os.sep)
-    media = library.get(path)
-    if media == None:
-        if library is _sound_lib:
-            media = pygame.mixer.Sound(path)
-        elif library is _music_lib:
-            media = pygame.mixer.music.load(path)
-        elif library is _image_lib:
-            media = pygame.image.load(path)
-        else:
-            raise("Unknown media library: ", library)
-        library[path] = media
-    if library is _sound_lib:
-        sound.play()
-        return None
-    elif library is _music_lib:
-        pygame.mixer.music.play()
-        return None
-    elif library is _image_lib:
-        return media
-    else:
-        raise("Unknown media library: ", library)
-
-def load_sound(path):
-    return load_media(path, _sound_lib)
-
-def load_music(path):
-    return load_media(path, _music_lib)
-
-def load_image(path):
-    return load_media(path, _image_lib)
-
-def load_font(font, size):
-    global _font_lib
-    key = str(font) + '|' + str(size)
-    font_object = _font_lib.get(key, None)
-    if font_object == None:
-        try:
-            font_object = pygame.font.Font(font, size)
-        except OSError:
-            font_object = pygame.font.SysFont("", size)
-            print("Font (",font,") not found! Using system default font.")
-        _font_lib[key] = font_object
-    return font_object
-
-def load_text(text, font, size, color):
-    global _text_lib, _font_dir
-    font = os.path.join(_font_dir, font)
-    key = '|'.join(map(str, (font, size, color, text)))
-    font_rendered = _text_lib.get(key, None)
-    if font_rendered == None:
-        font_object = load_font(font, size)
-        font_rendered = font_object.render(text, True, color)
-        _text_lib[key] = font_rendered
-    return font_rendered
-
-def get_center(max_size, act_size):
-    return max_size // 2 - act_size // 2
-
 class MenuItem:
-    def __init__(self, name, font, font_size, font_color, action=""):
+    def __init__(self, name, font=None, font_size=21,
+                 font_color=color_lib["white"], action=""):
         self.name = name
         self.font = font
         self.font_size = font_size
@@ -169,7 +93,7 @@ class SceneBase:
         print("Forget to override this in the child class!")
         return self.__class__.__name__
 
-    def Update(self):
+    def Update(self, screen):
         """Game logic: updating flags and variables, move sprites."""
         print("Forget to override this in the child class!")
 
@@ -179,7 +103,7 @@ class SceneBase:
 
 class TitleScene(SceneBase):
     def __init__(self, screen):
-        global _color_lib, _menu_items
+        global color_lib, _menu_items
 
         SceneBase.__init__(self, screen)
         pygame.mouse.set_visible(True)
@@ -187,7 +111,7 @@ class TitleScene(SceneBase):
         self.font = "fff_tusj.ttf"
         self.title_font_size = 72
         self.item_font_size = 50
-        self.font_color = _color_lib["black"]
+        self.font_color = color_lib["black"]
         self.items = []
         self.cur_item = None
 
@@ -246,9 +170,9 @@ class TitleScene(SceneBase):
         pass
 
     def Render(self, screen):
-        global _color_lib
+        global color_lib
 
-        screen.fill(_color_lib["orange"])
+        screen.fill(color_lib["orange"])
 
         for label in self.items:
             screen.blit(label.text, (label.posx, label.posy))
@@ -269,11 +193,11 @@ class OptionsScene(SceneBase):
         pass
 
     def Render(self, screen):
-        global _color_lib
+        global color_lib
 
-        screen.fill(_color_lib["forest"])
+        screen.fill(color_lib["forest"])
 
-        label = MenuItem("The cake is a lie!", "fff_tusj.ttf", 72, _color_lib["white"])
+        label = MenuItem("The cake is a lie!", "fff_tusj.ttf", 72, color_lib["white"])
         posx = get_center(screen.get_width(), label.width)
         posy = get_center(screen.get_height(), label.height)
         label.SetPos(posx, posy)
@@ -281,11 +205,11 @@ class OptionsScene(SceneBase):
 
 class Bunny:
     def __init__(self, posx, posy):
-        global _image_dir
+        global image_dir
 
         scaled_width = 40
 
-        self.look = load_image(os.path.join(_image_dir,"bunny_look.png"))
+        self.look = load_image(os.path.join(image_dir,"bunny_look.png"))
         self.look = pygame.transform.flip(self.look, True, False)
         self.facing_right = True
         self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(1.5*scaled_width)))
@@ -320,23 +244,23 @@ class GameScene(SceneBase):
         SceneBase.__init__(self, screen)
         pygame.mouse.set_visible(False)
 
-        self.bunny = Bunny(screen.get_width() // 20, \
+        self.bunny = Bunny(screen.get_width() // 20,
                            screen.get_height() - (screen.get_height() // 3))
 
     def ProcessInput(self, events, pressed_keys):
-        global _key_lib
+        global key_lib
 
         for event in events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 # Move back to title scene when escape is pressed
                 return "TitleScene"
-            elif event.type == pygame.KEYDOWN and event.key == _key_lib["left"]:
+            elif event.type == pygame.KEYDOWN and event.key == key_lib["left"]:
                 self.bunny.move(-10,0)
-            elif event.type == pygame.KEYDOWN and event.key == _key_lib["right"]:
+            elif event.type == pygame.KEYDOWN and event.key == key_lib["right"]:
                 self.bunny.move(10,0)
-            elif event.type == pygame.KEYDOWN and event.key == _key_lib["jump"]:
+            elif event.type == pygame.KEYDOWN and event.key == key_lib["jump"]:
                 self.bunny.move(0,-10)
-            elif event.type == pygame.KEYDOWN and event.key == _key_lib["duck"]:
+            elif event.type == pygame.KEYDOWN and event.key == key_lib["duck"]:
                 self.bunny.move(0,10)
         return self.__class__.__name__
 
@@ -344,12 +268,24 @@ class GameScene(SceneBase):
         self.bunny.force_boundaries(screen)
 
     def Render(self, screen):
-        global _color_lib
+        global color_lib
 
-        screen.fill(_color_lib["royalblue"])
-        pygame.draw.rect(screen, _color_lib["neon"], pygame.Rect(self.bunny.posx, self.bunny.posy, self.bunny.width, self.bunny.height),1)
+        screen.fill(color_lib["royalblue"])
+        pygame.draw.rect(screen, color_lib["neon"], pygame.Rect(self.bunny.posx, self.bunny.posy, self.bunny.width, self.bunny.height),1)
         screen.blit(self.bunny.look, (self.bunny.posx, self.bunny.posy))
 
+def ask_question(question):
+    """
+    try:
+        subprocess.run(["python","ask.py"],
+                       input=question.encode("utf-8"),
+                       check=True)
+    except subprocess.CalledProcessError:
+        return True
+    
+    return False
+    """
+        
 def main(width, height, fps):
     pygame.init()
 
@@ -385,12 +321,12 @@ def main(width, height, fps):
 
     # Create graphical window
     pygame.display.set_caption("Bunny hop")
-    pygame.display.set_icon(load_image(os.path.join(_image_dir,"bunny_256.png")))
+    pygame.display.set_icon(load_image(os.path.join(image_dir,"bunny_256.png")))
     screen = pygame.display.set_mode((width, height))
 
     clock = pygame.time.Clock()
     active_scene = TitleScene(screen)
-
+    
     while True:
         filtered_events = []
         pressed_keys = pygame.key.get_pressed()
@@ -406,7 +342,8 @@ def main(width, height, fps):
 
         next_scene = active_scene.ProcessInput(filtered_events, pressed_keys)
         if next_scene == "":
-            # If the returned scene name is empty, break the main loop and exit
+            # If the returned scene name is empty, ask quit for approval
+            #if ask_question("Do you really want to quit?"):
             break
         elif next_scene == active_scene.__class__.__name__ :
             # Don't need to change scene, we can continue normally
