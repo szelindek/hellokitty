@@ -37,20 +37,9 @@ detect display resolution and collect possible resolutions:
 
 quitscene and optionscene should be single instance classes
 
-"global" statement not needed for reading global values (_lib)!
-
 TEST:
-    moves continuously when single key hold down
-    print(bunny.moving_dir) values while pressing key combos
-    force_boundaries works even in corners
-    bunny movement speed (bunny.move-step) is scaled to the resolution
-    quitscene rendered correctly
-    quitscene is functional -> ESCAPE, YES, NO works
-    quitscene hides titlescene (titlescene buttons not functional)
-    proper init of scenes -> SceneBase, MenuBase called
-    background and menus are properly blitted onto the screen inside their window
+    key combo fix -> left HOLD, right HOLD, left RELEASE -> won't move right
     check again font rendering -> same texts not rendered multiple times
-    bunny positioned the same and looks the same after implementing Rect
 """
 
 import os
@@ -60,19 +49,18 @@ from libfalcon import *
 
 # Items of a menu: tuple of labels of the menu items and the scenes connected.
 # Empty scene means exit
-_title_items  = (("Bunny hop", "TitleScene"), ("Start game", "GameScene"),
-                 ("Options", "OptionsScene"), ("Quit", "QuitScene"))
-_option_items = (("Options", "OptionsScene"), ("Resolution", "OptionsScene"),
-                 ("Fullscreen", "OptionsScene"), ("Keys", "OptionsScene"),
-                 ("Mute sounds", "OptionsScene"))
-_quit_items   = (("Do you really want to let the bunny down?", "QuitScene"),
-                 ("Yes, I am a bad person...", ""),
-                 ("No, of course not!", "TitleScene"))
+_title_items  = (("Bunny hop", "TitleScene", True), ("Start game", "GameScene", False),
+                 ("Options", "OptionsScene", False), ("Quit", "QuitScene", False))
+_option_items = (("Options", "OptionsScene", True), ("Resolution", "OptionsScene", False),
+                 ("Fullscreen", "OptionsScene", False), ("Keys", "OptionsScene", False),
+                 ("Mute sounds", "OptionsScene", False))
+_quit_items   = (("Do you really want to", "QuitScene", True),
+                 ("leave the bunny alone?", "QuitScene", True),
+                 ("Yes! I am a bad person...", "", False),
+                 ("No, of course not!", "TitleScene", False))
 
 class TitleScene(SceneBase, MenuBase):
-    def __init__(self, screen, font=default_font, font_size=default_font_size,
-                 header_font_size=default_header_font_size,
-                 font_color=default_font_color):
+    def __init__(self, screen):
         SceneBase.__init__(self, screen,
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
         MenuBase.__init__(self, screen, _title_items)
@@ -93,15 +81,10 @@ class TitleScene(SceneBase, MenuBase):
         MenuBase.BlitMenu(self, screen, color_lib["orange"])
 
 class QuitScene(SceneBase, MenuBase):
-    def __init__(self, screen, font=default_font, font_size=default_font_size,
-                 header_font_size=default_header_font_size,
-                 font_color=default_font_color):
+    def __init__(self, screen):
         SceneBase.__init__(self, screen,
-            pygame.Rect(get_center(screen.get_width(), screen.get_width()//2),
-                get_center(screen.get_height(), screen.get_height()//2),
-                screen.get_width()//2,
-                screen.get_height()//2))
-        MenuBase.__init__(self, screen, _quit_items)
+            pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
+        MenuBase.__init__(self, screen, _quit_items, font_size=35, header_font_size=50, spacing_ratio=25)
 
     def ProcessInput(self, events, pressed_keys):
         for event in events:
@@ -119,15 +102,13 @@ class QuitScene(SceneBase, MenuBase):
         pass
 
     def Render(self, screen):
-        MenuBase.BlitMenu(self, screen, color_lib["purple"])
+        MenuBase.BlitMenu(self, screen, color_lib["dark_orange"])
 
 class OptionsScene(SceneBase, MenuBase):
-    def __init__(self, screen, font=default_font, font_size=default_font_size,
-                 header_font_size=default_header_font_size,
-                 font_color=default_font_color):
+    def __init__(self, screen):
         SceneBase.__init__(self, screen,
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
-        MenuBase.__init__(self, screen, _option_items)
+        MenuBase.__init__(self, screen, _option_items, font_size=40)
 
     def ProcessInput(self, events, pressed_keys):
         for event in events:
@@ -149,10 +130,8 @@ class OptionsScene(SceneBase, MenuBase):
 
 class Bunny:
     def __init__(self, posx, posy, screen):
-        global image_dir
-
         # Move 1/50 of the screen in each frame
-        self.move_step = screen.get_width() // 50
+        self.move_step = screen.get_width() // 200
 
         # Load bunny, it should be facing right by default
         self.look = load_image(os.path.join(image_dir,"bunny_look.png"))
@@ -171,14 +150,12 @@ class Bunny:
         self.moving_dir = 0
 
     def moving(self, direction, start_movement):
-        global mov_lib_r
-
         if start_movement:
-            if ((self.moving_dir + direction) in mov_lib_r):
-                self.moving_dir += direction
+            if (self.moving_dir | direction) in mov_lib_r:
+                self.moving_dir |= direction
         else:
-            if ((self.moving_dir - direction) in mov_lib_r):
-                self.moving_dir -= direction
+            if (self.moving_dir & ~direction) in mov_lib_r:
+                self.moving_dir &= ~direction
 
     def move(self, posx_delta, posy_delta):
         self.rect.x += posx_delta
@@ -213,8 +190,6 @@ class GameScene(SceneBase):
                            screen)
 
     def ProcessInput(self, events, pressed_keys):
-        global key_lib_r
-
         for event in events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 # Move back to title scene when escape is pressed

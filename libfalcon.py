@@ -64,7 +64,8 @@ color_lib = {
     "deeppink":     (255, 20, 147),
     "skyblue":      (0, 191, 255),
     "forest":       (34, 139, 34),
-    "indigo":       (75, 0, 130)
+    "indigo":       (75, 0, 130),
+    "dark_orange":  (200,100,0)
 }
 
 default_font = "fff_tusj.ttf"
@@ -205,9 +206,9 @@ class MenuItem:
 
 class MenuBase:
     def __init__(self, screen, item_list, font=default_font,
-                 font_size=default_font_size,
-                 header_font_size=default_header_font_size,
-                 font_color=default_font_color):
+    font_size=default_font_size, header_font_size=default_header_font_size,
+    font_color=default_font_color, spacing_ratio=50):
+        
         self.font = font
         self.font_size = font_size
         self.header_font_size = header_font_size
@@ -216,23 +217,27 @@ class MenuBase:
 
         # For the aesthetical layout, we add a spacing before the title
         # and between the menu options
-        spacing = self.window.h // 50
+        spacing = self.window.h // spacing_ratio
         # For the title, the offset is the spacing above it, but for
         # the other menu items, it will be increased with the height
         # of the title and with future spacings which will be put
         # between the menu items
         offset = spacing
-        # Exclude the title from the count of menu items
-        item_cnt = len(item_list)-1
+        # Exclude the headers from the count of menu items
+        item_cnt = 0
+        for element in item_list:
+            if element[2] == False:
+                item_cnt += 1
 
         # Create and store menu items
         for index, element in enumerate(item_list):
             name = element[0]
             scene = element[1]
+            isheader = element[2]
 
             # Render the text for current item
             font_size = self.font_size
-            if index == 0:
+            if isheader:
                 font_size = self.header_font_size
             label = MenuItem(name, self.font, font_size, self.font_color, scene)
 
@@ -241,16 +246,18 @@ class MenuBase:
             posx = get_center(self.window.w, label.width) + self.window.x
             posy = offset
 
-            if index == 0:
-                # Increase offset for "not title" menu items
-                offset += label.height + spacing * (item_cnt-1)
+            if isheader:
+                # Increase offset for "not header" menu items with height of the header
+                offset += label.height
             else :
                 # The screen height virtually decreased with the offset,
                 # the height of each menu item virtually increased with the spacing,
                 # and index is decremented, because the title is excluded from indexing
                 posy += get_center((self.window.h - offset),
-                                   (item_cnt * (label.height + spacing))) + \
-                        ((index-1) * (label.height + spacing)) + self.window.y
+                            (item_cnt * (label.height + spacing))) + \
+                        ((index-(len(item_list)-item_cnt)) * (label.height + spacing)) + self.window.y
+                # Increase offset for "not title" menu items with height of spacings inbetween
+                offset += spacing
 
             # Update label position and store label
             label.SetPos(posx, posy)
