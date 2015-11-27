@@ -8,7 +8,7 @@ util_chimpy:
 util_functions:
     keyboard control for menu
 
-defaults for optional parameters
+write C extensions
 
 store image of the background
 movement:
@@ -30,15 +30,10 @@ detect display resolution and collect possible resolutions:
         current_w, current_h: current resolution
     pygame.display.get_wm_info() -> windowed mode info list
 
-range_lo and range_hi for printing lists: range_lo == offset
-
-popup message window:
-    Quitscene? -> background is snapshot
-    Titlescene init text and font
-    Titlescene init whole image which will be blitted onto the Titlescene, when asking
-
-C extension:
-    bitarray
+defaults for SceneBase -> font, size, color, ...
+menu creation to function or SceneBase init ("items" list)
+init quitscene before main loop and keep in memory
+    when titlescene wants to execute quitscene constructor return the existing object
 
 TEST:
     mirror bunny_look.png and spare "transform.flip" from Bunny.init()
@@ -49,6 +44,11 @@ TEST:
     force_boundaries works even in corners
     bunny image ratio is okay on multiple resolutions
     bunny movement speed (bunny.move-step) is scaled to the resolution
+    mouse enabled by SceneBase init
+    quitscene rendered correctly
+    quitscene is functional -> ESCAPE, YES, NO works
+    quitscene hides titlescene (titlescene buttons not functional)
+
 """
 
 import os
@@ -59,10 +59,11 @@ from libfalcon import *
 # Items of the main menu: tuples of label of the menu item and the scene
 # connected to it
 _menu_items = (("Bunny hop", "TitleScene"), ("Start game", "GameScene"),
-               ("Options", "OptionsScene"), ("Quit", ""))
+               ("Options", "OptionsScene"), ("Quit", "QuitScene"))
 _option_items = ("Options", "Resolution", "Fullscreen", "Keys", "Mute sounds")
-
-_quit_question = "Do you really want to let this bunny down?"
+_quit_items = (("Do you really want to let the bunny down?", "QuitScene"),
+               ("Yes, I am a bad person...", ""),
+               ("No, of course not!", "TitleScene"))
 
 class MenuItem:
     def __init__(self, name, font=None, font_size=21,
@@ -94,17 +95,15 @@ class MenuItem:
 
 class TitleScene(SceneBase):
     def __init__(self, screen):
-        global color_lib, _menu_items
+        global default_font, color_lib, _menu_items
 
         SceneBase.__init__(self, screen)
-        pygame.mouse.set_visible(True)
 
-        self.font = "fff_tusj.ttf"
+        self.font = default_font
         self.title_font_size = 72
         self.item_font_size = 50
         self.font_color = color_lib["black"]
         self.items = []
-        self.cur_item = None
 
         # For the aesthetical layout, we add a spacing before the title
         # and between the menu options
@@ -140,7 +139,9 @@ class TitleScene(SceneBase):
                 # The screen height virtually decreased with the offset,
                 # the height of each menu item virtually increased with the spacing,
                 # and index is decremented, because the title is excluded from indexing
-                posy += get_center((screen.get_height() - offset), (item_cnt * (label.height + spacing))) + ((index-1) * (label.height + spacing))
+                posy += get_center((screen.get_height() - offset),
+                                   (item_cnt * (label.height + spacing))) + \
+                        ((index-1) * (label.height + spacing))
 
             # Update label position and store label
             label.SetPos(posx, posy)
@@ -167,12 +168,91 @@ class TitleScene(SceneBase):
             screen.blit(label.text, (label.posx, label.posy))
 
 class QuitScene(SceneBase):
-    pass
+    def __init__(self, screen):
+        global default_font, color_lib, _quit_items
+
+        SceneBase.__init__(self, screen)
+
+        self.window = pygame.Rect(
+                       get_center(screen.get_width(), screen.get_width()//2),
+                       get_center(screen.get_height(), screen.get_height()//2),
+                       screen.get_width()//2,
+                       screen.get_height()//2)
+
+        self.font = default_font
+        self.title_font_size = 72
+        self.item_font_size = 50
+        self.font_color = color_lib["black"]
+        self.items = []
+
+        # For the aesthetical layout, we add a spacing before the title
+        # and between the menu options
+        spacing = self.window.h // 50
+        # For the title, the offset is the spacing above it, but for
+        # the other menu items, it will be increased with the height
+        # of the title and with future spacings which will be put
+        # between the menu items
+        offset = spacing
+        # Exclude the title from the count of menu items
+        item_cnt = len(_quit_items)-1
+
+        # Create and store menu items
+        for index, element in enumerate(_quit_items):
+            name = element[0]
+            scene = element[1]
+
+            # Render the text for current item
+            font_size = self.item_font_size
+            if index == 0:
+                font_size = self.title_font_size
+            label = MenuItem(name, self.font, font_size, self.font_color, scene)
+
+            # Center horizontally on the screen, and init vertical position
+            # with the current offset
+            posx = get_center(self.window.w, label.width) + self.window.x
+            posy = offset
+
+            if index == 0:
+                # Increase offset for "not title" menu items
+                offset += label.height + spacing * (item_cnt-1)
+            else :
+                # The screen height virtually decreased with the offset,
+                # the height of each menu item virtually increased with the spacing,
+                # and index is decremented, because the title is excluded from indexing
+                posy += get_center((self.window.h - offset),
+                                   (item_cnt * (label.height + spacing))) + \
+                        ((index-1) * (label.height + spacing)) + self.window.y
+
+            # Update label position and store label
+            label.SetPos(posx, posy)
+            self.items.append(label)
+
+    def ProcessInput(self, events, pressed_keys):
+        for event in events:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                # Move back to title scene when escape is pressed
+                return "TitleScene"
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_pos = pygame.mouse.get_pos()
+                for label in self.items:
+                    if label.IsMouseHovered(mouse_pos):
+                        return label.scene
+        return self.__class__.__name__
+
+    def Update(self, screen):
+        pass
+
+    def Render(self, screen):
+        global color_lib
+
+        screen.fill(color_lib["purple"], self.window)
+
+        for label in self.items:
+            screen.blit(label.text, (label.posx, label.posy))
 
 class OptionsScene(SceneBase):
     def __init__(self, screen):
         SceneBase.__init__(self, screen)
-        pygame.mouse.set_visible(True)
 
     def ProcessInput(self, events, pressed_keys):
         for event in events:
@@ -185,11 +265,11 @@ class OptionsScene(SceneBase):
         pass
 
     def Render(self, screen):
-        global color_lib
+        global default_font, color_lib
 
         screen.fill(color_lib["forest"])
 
-        label = MenuItem("The cake is a lie!", "fff_tusj.ttf", 72, color_lib["white"])
+        label = MenuItem("The cake is a lie!", default_font, 72, color_lib["white"])
         posx = get_center(screen.get_width(), label.width)
         posy = get_center(screen.get_height(), label.height)
         label.SetPos(posx, posy)
@@ -303,13 +383,6 @@ class GameScene(SceneBase):
         pygame.draw.rect(screen, color_lib["neon"], pygame.Rect(self.bunny.posx, self.bunny.posy, self.bunny.width, self.bunny.height),1)
         screen.blit(self.bunny.look, (self.bunny.posx, self.bunny.posy))
 
-def approve_quit_request(question):
-    # pop up message, catch response, return True or False
-
-
-
-    return True
-
 def main(width, height, fps):
     pygame.init()
 
@@ -367,9 +440,8 @@ def main(width, height, fps):
 
         next_scene = active_scene.ProcessInput(filtered_events, pressed_keys)
         if next_scene == "":
-            # If the next scene name is empty string, then "Quit" was selected
-            if approve_quit_request():
-                break
+            # If the next scene name is empty string, then quit
+            break
         elif next_scene == active_scene.__class__.__name__ :
             # Don't need to change the scene, we can continue normally
             active_scene.Update(screen)
