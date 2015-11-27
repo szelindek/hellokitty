@@ -35,21 +35,15 @@ detect display resolution and collect possible resolutions:
         current_w, current_h: current resolution
     pygame.display.get_wm_info() -> windowed mode info list
 
-look up singleton classes in python -> quitscene should singleton, init it before
-    main loop and use that later
+quitscene and optionscene should be single instance classes
 
 "global" statement not needed for reading global values (_lib)!
 
 TEST:
-    mirror bunny_look.png and spare "transform.flip" from Bunny.init()
     moves continuously when single key hold down
     print(bunny.moving_dir) values while pressing key combos
-    can move diagonally
-    cannot move left and right same time
     force_boundaries works even in corners
-    bunny image ratio is okay on multiple resolutions
     bunny movement speed (bunny.move-step) is scaled to the resolution
-    mouse enabled by SceneBase init
     quitscene rendered correctly
     quitscene is functional -> ESCAPE, YES, NO works
     quitscene hides titlescene (titlescene buttons not functional)
@@ -162,17 +156,16 @@ class Bunny:
 
         # Load bunny, it should be facing right by default
         self.look = load_image(os.path.join(image_dir,"bunny_look.png"))
-        self.look = pygame.transform.flip(self.look, True, False)
         self.facing_right = True
 
         # Scale the look of the bunny depending on the display resolution
-        self.rect = (posx, posy, self.look.get_width(), self.look.get_height())
+        self.rect = pygame.Rect(posx, posy, self.look.get_width(), self.look.get_height())
         ratio = self.rect.h / self.rect.w
         scaled_width = screen.get_width() // 16
         self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(ratio*scaled_width)))
 
         # Update rect, which is changed due to scaling
-        self.rect = (posx, posy, self.look.get_width(), self.look.get_height())
+        self.rect = pygame.Rect(posx, posy, self.look.get_width(), self.look.get_height())
 
         # Has one of the defined values in "mov_lib"
         self.moving_dir = 0
