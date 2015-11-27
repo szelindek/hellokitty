@@ -12,6 +12,7 @@ util_chimpy:
     create RenderPlain==Group class -> sprite handling easier
 util_functions:
     keyboard control for menu
+    key combo fix -> left HOLD, right HOLD, left RELEASE -> won't move right
 
 write C extensions
 
@@ -28,18 +29,8 @@ Physics:
     inputs apply forces
     no inertia?
 
-detect display resolution and collect possible resolutions:
-    pygame.display.list_modes() -> all possible resolutions
-    pygame.display.Info() -> display info object
-        wm: if false, then only fullscreen is allowed (no windowed mode)
-        current_w, current_h: current resolution
-    pygame.display.get_wm_info() -> windowed mode info list
-
-quitscene and optionscene should be single instance classes
-
 TEST:
-    key combo fix -> left HOLD, right HOLD, left RELEASE -> won't move right
-    check again font rendering -> same texts not rendered multiple times
+    
 """
 
 import os
@@ -130,7 +121,7 @@ class OptionsScene(SceneBase, MenuBase):
 
 class Bunny:
     def __init__(self, posx, posy, screen):
-        # Move 1/50 of the screen in each frame
+        # Move 1/200 of the screen in each frame
         self.move_step = screen.get_width() // 200
 
         # Load bunny, it should be facing right by default
@@ -143,13 +134,15 @@ class Bunny:
         scaled_width = screen.get_width() // 16
         self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(ratio*scaled_width)))
 
-        # Update rect, which is changed due to scaling
-        self.rect = pygame.Rect(posx, posy, self.look.get_width(), self.look.get_height())
+        # Update rect, which is changed due to scaling. 
+        # The real posy of the bunny is derived from the posy of the ground (input)
+        self.rect = pygame.Rect(posx, posy-self.look.get_height(), self.look.get_width(), self.look.get_height())
 
         # Has one of the defined values in "mov_lib"
         self.moving_dir = 0
 
-    def moving(self, direction, start_movement):
+    def SetMovingDirection(self, direction, start_movement):
+        """Map pressed keys to a bitfield, to determine movement direction"""
         if start_movement:
             if (self.moving_dir | direction) in mov_lib_r:
                 self.moving_dir |= direction
@@ -157,7 +150,8 @@ class Bunny:
             if (self.moving_dir & ~direction) in mov_lib_r:
                 self.moving_dir &= ~direction
 
-    def move(self, posx_delta, posy_delta):
+    def UpdateCoordinates(self, posx_delta, posy_delta):
+        """Change coordinates of the bunny, update the direction it's facing"""
         self.rect.x += posx_delta
         self.rect.y += posy_delta
 
@@ -168,7 +162,8 @@ class Bunny:
             self.look = pygame.transform.flip(self.look, True, False)
             self.facing_right = not self.facing_right
 
-    def force_boundaries(self, screen):
+    def ForceBoundaries(self, screen):
+        """Keep the bunny on-screen, modify coordinates in case it would move outside"""
         if self.rect.x < 0:
             self.rect.x = 0
         elif self.rect.x > screen.get_width() - self.rect.w:
@@ -184,9 +179,13 @@ class GameScene(SceneBase):
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
 
         pygame.mouse.set_visible(False)
+        
+        # Define background settings
+        self.ground = pygame.Rect(0, screen.get_height() * 5 // 6, screen.get_width(), screen.get_height() // 6)
 
+        # Create a bunny
         self.bunny = Bunny(screen.get_width() // 20,
-                           screen.get_height() - (screen.get_height() // 3),
+                           self.ground.y,
                            screen)
 
     def ProcessInput(self, events, pressed_keys):
@@ -195,35 +194,38 @@ class GameScene(SceneBase):
                 # Move back to title scene when escape is pressed
                 return "TitleScene"
             elif event.type == pygame.KEYDOWN and event.key in key_lib_r:
-                self.bunny.moving(mov_lib[key_lib_r[event.key]],True)
+                self.bunny.SetMovingDirection(mov_lib[key_lib_r[event.key]],True)
             elif event.type == pygame.KEYUP and event.key in key_lib_r:
-                self.bunny.moving(mov_lib[key_lib_r[event.key]],False)
+                self.bunny.SetMovingDirection(mov_lib[key_lib_r[event.key]],False)
 
         return self.__class__.__name__
 
     def Update(self, screen):
+        # Update the position of the bunny based on the pressed keys
         tmp = self.bunny.moving_dir
         pow_2 = 0
         while tmp:
             if tmp % 2:
                 direction = 2 ** pow_2
                 if "left" == mov_lib_r[direction]:
-                    self.bunny.move(-self.bunny.move_step,0)
+                    self.bunny.UpdateCoordinates(-self.bunny.move_step,0)
                 elif "right" == mov_lib_r[direction]:
-                    self.bunny.move(self.bunny.move_step,0)
+                    self.bunny.UpdateCoordinates(self.bunny.move_step,0)
                 elif "up" == mov_lib_r[direction]:
-                    self.bunny.move(0,-self.bunny.move_step)
+                    self.bunny.UpdateCoordinates(0,-self.bunny.move_step)
                 elif "down" == mov_lib_r[direction]:
-                    self.bunny.move(0,self.bunny.move_step)
+                    self.bunny.UpdateCoordinates(0,self.bunny.move_step)
             pow_2 += 1
             tmp = tmp // 2
-
-        self.bunny.force_boundaries(screen)
+        # Check the position on both axles
+        self.bunny.ForceBoundaries(screen)
 
     def Render(self, screen):
         screen.fill(color_lib["royalblue"], self.window)
-        pygame.draw.rect(screen, color_lib["neon"],
-            pygame.Rect(self.bunny.rect.x, self.bunny.rect.y, self.bunny.rect.w, self.bunny.rect.h),1)
+
+        screen.fill(color_lib["spring"], self.ground)
+        
+        #pygame.draw.rect(screen, color_lib["neon"],pygame.Rect(self.bunny.rect.x, self.bunny.rect.y, self.bunny.rect.w, self.bunny.rect.h),1)
         screen.blit(self.bunny.look, (self.bunny.rect.x, self.bunny.rect.y))
 
 def main(width, height, fps):
@@ -267,7 +269,7 @@ def main(width, height, fps):
 
     clock = pygame.time.Clock()
     active_scene = TitleScene(screen)
-
+    
     while True:
         filtered_events = []
         pressed_keys = pygame.key.get_pressed()
@@ -284,7 +286,7 @@ def main(width, height, fps):
         next_scene = active_scene.ProcessInput(filtered_events, pressed_keys)
         if next_scene == "":
             # If the next scene name is empty string, then quit
-            break
+            return
         elif next_scene == active_scene.__class__.__name__ :
             # Don't need to change the scene, we can continue normally
             active_scene.Update(screen)
