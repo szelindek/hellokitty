@@ -35,10 +35,10 @@ detect display resolution and collect possible resolutions:
         current_w, current_h: current resolution
     pygame.display.get_wm_info() -> windowed mode info list
 
-use Rect class for (posx, posy, width, height)
+look up singleton classes in python -> quitscene should singleton, init it before
+    main loop and use that later
 
-init quitscene before main loop and keep in memory
-    when titlescene wants to execute quitscene constructor return the existing object
+"global" statement not needed for reading global values (_lib)!
 
 TEST:
     mirror bunny_look.png and spare "transform.flip" from Bunny.init()
@@ -56,6 +56,7 @@ TEST:
     proper init of scenes -> SceneBase, MenuBase called
     background and menus are properly blitted onto the screen inside their window
     check again font rendering -> same texts not rendered multiple times
+    bunny positioned the same and looks the same after implementing Rect
 """
 
 import os
@@ -67,7 +68,9 @@ from libfalcon import *
 # Empty scene means exit
 _title_items  = (("Bunny hop", "TitleScene"), ("Start game", "GameScene"),
                  ("Options", "OptionsScene"), ("Quit", "QuitScene"))
-_option_items = ("Options", "Resolution", "Fullscreen", "Keys", "Mute sounds")
+_option_items = (("Options", "OptionsScene"), ("Resolution", "OptionsScene"),
+                 ("Fullscreen", "OptionsScene"), ("Keys", "OptionsScene"),
+                 ("Mute sounds", "OptionsScene"))
 _quit_items   = (("Do you really want to let the bunny down?", "QuitScene"),
                  ("Yes, I am a bad person...", ""),
                  ("No, of course not!", "TitleScene"))
@@ -163,17 +166,13 @@ class Bunny:
         self.facing_right = True
 
         # Scale the look of the bunny depending on the display resolution
-        self.width = self.look.get_width()
-        self.height = self.look.get_height()
-        ratio = self.height / self.width
+        self.rect = (posx, posy, self.look.get_width(), self.look.get_height())
+        ratio = self.rect.h / self.rect.w
         scaled_width = screen.get_width() // 16
         self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(ratio*scaled_width)))
 
-        # Store all info for Rect
-        self.posx = posx
-        self.posy = posy
-        self.width = self.look.get_width()
-        self.height = self.look.get_height()
+        # Update rect, which is changed due to scaling
+        self.rect = (posx, posy, self.look.get_width(), self.look.get_height())
 
         # Has one of the defined values in "mov_lib"
         self.moving_dir = 0
@@ -189,8 +188,8 @@ class Bunny:
                 self.moving_dir -= direction
 
     def move(self, posx_delta, posy_delta):
-        self.posx += posx_delta
-        self.posy += posy_delta
+        self.rect.x += posx_delta
+        self.rect.y += posy_delta
 
         # If moving left but facing right, or moving right but facing left,
         # then flip the bunny look, to face in the direction of the movement
@@ -200,14 +199,14 @@ class Bunny:
             self.facing_right = not self.facing_right
 
     def force_boundaries(self, screen):
-        if self.posx < 0:
-            self.posx = 0
-        elif self.posx > screen.get_width() - self.width:
-            self.posx = screen.get_width() - self.width
-        if self.posy < 0:
-            self.posy = 0
-        elif self.posy > screen.get_height() - self.height:
-            self.posy = screen.get_height() - self.height
+        if self.rect.x < 0:
+            self.rect.x = 0
+        elif self.rect.x > screen.get_width() - self.rect.w:
+            self.rect.x = screen.get_width() - self.rect.w
+        if self.rect.y < 0:
+            self.rect.y = 0
+        elif self.rect.y > screen.get_height() - self.rect.h:
+            self.rect.y = screen.get_height() - self.rect.h
 
 class GameScene(SceneBase):
     def __init__(self, screen):
@@ -256,8 +255,8 @@ class GameScene(SceneBase):
     def Render(self, screen):
         screen.fill(color_lib["royalblue"], self.window)
         pygame.draw.rect(screen, color_lib["neon"],
-            pygame.Rect(self.bunny.posx, self.bunny.posy, self.bunny.width, self.bunny.height),1)
-        screen.blit(self.bunny.look, (self.bunny.posx, self.bunny.posy))
+            pygame.Rect(self.bunny.rect.x, self.bunny.rect.y, self.bunny.rect.w, self.bunny.rect.h),1)
+        screen.blit(self.bunny.look, (self.bunny.rect.x, self.bunny.rect.y))
 
 def main(width, height, fps):
     pygame.init()
