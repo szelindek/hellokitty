@@ -11,44 +11,19 @@ Content:
 import os
 import pygame
 
-############################### SHARED LIBRARIES ###############################
+############################### UTILITY FUNCTIONS ##############################
 
 def inverse_dict(dict):
     return {dict[k] : k for k in dict}
 
+# Calculate center from two inputs, returned value is minimum zero
+def get_center(max_size, act_size):
+    return max((max_size // 2 - act_size // 2), 0)
+
+############################### SHARED LIBRARIES ###############################
+
 font_dir = "fonts"
 image_dir = "images"
-
-default_font = "fff_tusj.ttf"
-
-sound_lib = {}
-music_lib = {}
-image_lib = {}
-font_lib = {}
-text_lib = {}
-
-mov_lib = {
-    "stand": 0,
-    "left":  1,
-    "up":    2,
-    "right": 4,
-    "down":  8,
-    "upleft":    3,
-    "upright":   6,
-    "downleft":  9,
-    "downright": 12
-}
-
-mov_lib_r = inverse_dict(mov_lib)
-
-key_lib = {
-    "left":  pygame.K_LEFT,
-    "right": pygame.K_RIGHT,
-    "up":    pygame.K_UP,
-    "down":  pygame.K_DOWN
-}
-
-key_lib_r = inverse_dict(key_lib)
 
 #http://www.psyclops.com/tools/rgb/
 color_lib = {
@@ -91,6 +66,40 @@ color_lib = {
     "forest":       (34, 139, 34),
     "indigo":       (75, 0, 130)
 }
+
+default_font = "fff_tusj.ttf"
+default_font_size = 50
+default_header_font_size = 72
+default_font_color = color_lib["black"]
+
+sound_lib = {}
+music_lib = {}
+image_lib = {}
+font_lib = {}
+text_lib = {}
+
+mov_lib = {
+    "stand": 0,
+    "left":  1,
+    "up":    2,
+    "right": 4,
+    "down":  8,
+    "upleft":    3,
+    "upright":   6,
+    "downleft":  9,
+    "downright": 12
+}
+
+mov_lib_r = inverse_dict(mov_lib)
+
+key_lib = {
+    "left":  pygame.K_LEFT,
+    "right": pygame.K_RIGHT,
+    "up":    pygame.K_UP,
+    "down":  pygame.K_DOWN
+}
+
+key_lib_r = inverse_dict(key_lib)
 
 ########################### MEDIA LOADING FUNCTIONS ############################
 
@@ -167,8 +176,94 @@ def load_text(text, font, size, color):
 
 ################################ CLASS TEMPLATES ###############################
 
+class MenuItem:
+    def __init__(self, name, font=default_font, font_size=default_font_size,
+                 font_color=default_font_color, scene=""):
+        self.name = name
+        self.font = font
+        self.font_size = font_size
+        self.font_color = font_color
+        self.scene = scene
+
+        self.text = load_text(name, self.font, self.font_size, self.font_color)
+
+        self.width = self.text.get_width()
+        self.height = self.text.get_height()
+        self.posx = 0
+        self.posy = 0
+
+    def SetPos(self, posx, posy):
+        self.posx = posx
+        self.posy = posy
+
+    def IsMouseHovered(self, mouse_pos):
+        mouse_posx, mouse_posy = mouse_pos
+        if self.posx <= mouse_posx and self.posx + self.width > mouse_posx and \
+           self.posy <= mouse_posy and self.posy + self.height > mouse_posy:
+            return True
+        return False
+
+class MenuBase:
+    def __init__(self, screen, item_list, font=default_font,
+                 font_size=default_font_size,
+                 header_font_size=default_header_font_size,
+                 font_color=default_font_color):
+        self.font = font
+        self.font_size = font_size
+        self.header_font_size = header_font_size
+        self.font_color = font_color
+        self.items = []
+
+        # For the aesthetical layout, we add a spacing before the title
+        # and between the menu options
+        spacing = self.window.h // 50
+        # For the title, the offset is the spacing above it, but for
+        # the other menu items, it will be increased with the height
+        # of the title and with future spacings which will be put
+        # between the menu items
+        offset = spacing
+        # Exclude the title from the count of menu items
+        item_cnt = len(item_list)-1
+
+        # Create and store menu items
+        for index, element in enumerate(item_list):
+            name = element[0]
+            scene = element[1]
+
+            # Render the text for current item
+            font_size = self.font_size
+            if index == 0:
+                font_size = self.header_font_size
+            label = MenuItem(name, self.font, font_size, self.font_color, scene)
+
+            # Center horizontally on the screen, and init vertical position
+            # with the current offset
+            posx = get_center(self.window.w, label.width) + self.window.x
+            posy = offset
+
+            if index == 0:
+                # Increase offset for "not title" menu items
+                offset += label.height + spacing * (item_cnt-1)
+            else :
+                # The screen height virtually decreased with the offset,
+                # the height of each menu item virtually increased with the spacing,
+                # and index is decremented, because the title is excluded from indexing
+                posy += get_center((self.window.h - offset),
+                                   (item_cnt * (label.height + spacing))) + \
+                        ((index-1) * (label.height + spacing)) + self.window.y
+
+            # Update label position and store label
+            label.SetPos(posx, posy)
+            self.items.append(label)
+
+    def BlitMenu(self, screen, background_color):
+        screen.fill(background_color, self.window)
+        for label in self.items:
+            screen.blit(label.text, (label.posx, label.posy))
+
 class SceneBase:
-    def __init__(self, screen):
+    def __init__(self, screen, window):
+        self.window = window
         pygame.mouse.set_visible(True)
 
     def ProcessInput(self, events, pressed_keys):
@@ -184,11 +279,3 @@ class SceneBase:
     def Render(self, screen):
         """Update screen, render new frame and show to the user."""
         print("Forget to override this in the child class!")
-
-############################### UTILITY FUNCTIONS ##############################
-
-
-
-# Calculate center from two inputs, returned value is minimum zero
-def get_center(max_size, act_size):
-    return max((max_size // 2 - act_size // 2), 0)
