@@ -40,15 +40,15 @@ popup message window:
 C extension:
     bitarray
 
-read bunny width/height ratio and use that instead of fix value
-scale bunny to resolution -> dynamic size
-
 TEST:
     mirror bunny_look.png and spare "transform.flip" from Bunny.init()
     moves continuously when single key hold down
-    print bunny.moving_dir values while pressing key combos
-    can move diagonally for allowed key combos
+    print(bunny.moving_dir) values while pressing key combos
+    can move diagonally
+    cannot move left and right same time
     force_boundaries works even in corners
+    bunny image ratio is okay on multiple resolutions
+    bunny movement speed (bunny.move-step) is scaled to the resolution
 """
 
 import os
@@ -196,23 +196,31 @@ class OptionsScene(SceneBase):
         screen.blit(label.text, (label.posx, label.posy))
 
 class Bunny:
-    def __init__(self, posx, posy):
+    def __init__(self, posx, posy, screen):
         global image_dir
 
-        scaled_width = 40
-        self.move_step = 10
+        # Move 1/50 of the screen in each frame
+        self.move_step = screen.get_width() // 50
 
+        # Load bunny, it should be facing right by default
         self.look = load_image(os.path.join(image_dir,"bunny_look.png"))
         self.look = pygame.transform.flip(self.look, True, False)
         self.facing_right = True
 
-        self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(1.5*scaled_width)))
+        # Scale the look of the bunny depending on the display resolution
+        self.width = self.look.get_width()
+        self.height = self.look.get_height()
+        ratio = self.height / self.width
+        scaled_width = screen.get_width() // 16
+        self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(ratio*scaled_width)))
+
+        # Store all info for Rect
         self.posx = posx
         self.posy = posy
         self.width = self.look.get_width()
         self.height = self.look.get_height()
 
-        # Bitfield with possible directions from "mov_lib"
+        # Has one of the defined values in "mov_lib"
         self.moving_dir = 0
 
     def moving(self, direction, start_movement):
@@ -252,7 +260,8 @@ class GameScene(SceneBase):
         pygame.mouse.set_visible(False)
 
         self.bunny = Bunny(screen.get_width() // 20,
-                           screen.get_height() - (screen.get_height() // 3))
+                           screen.get_height() - (screen.get_height() // 3),
+                           screen)
 
     def ProcessInput(self, events, pressed_keys):
         global key_lib_r
