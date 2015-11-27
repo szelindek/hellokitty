@@ -30,10 +30,11 @@ detect display resolution and collect possible resolutions:
         current_w, current_h: current resolution
     pygame.display.get_wm_info() -> windowed mode info list
 
-defaults for SceneBase -> font, size, color, ...
-menu creation to function or SceneBase init ("items" list)
+defaults for SceneBase.init() -> self.window, font, size, color, ...
+"items" list creation to SceneBase init, use self.window as offsetting
 init quitscene before main loop and keep in memory
     when titlescene wants to execute quitscene constructor return the existing object
+
 
 TEST:
     mirror bunny_look.png and spare "transform.flip" from Bunny.init()
@@ -58,20 +59,21 @@ from libfalcon import *
 
 # Items of the main menu: tuples of label of the menu item and the scene
 # connected to it
-_menu_items = (("Bunny hop", "TitleScene"), ("Start game", "GameScene"),
-               ("Options", "OptionsScene"), ("Quit", "QuitScene"))
+_title_items  = (("Bunny hop", "TitleScene"), ("Start game", "GameScene"),
+                 ("Options", "OptionsScene"), ("Quit", "QuitScene"))
 _option_items = ("Options", "Resolution", "Fullscreen", "Keys", "Mute sounds")
-_quit_items = (("Do you really want to let the bunny down?", "QuitScene"),
-               ("Yes, I am a bad person...", ""),
-               ("No, of course not!", "TitleScene"))
+_quit_items   = (("Do you really want to let the bunny down?", "QuitScene"),
+                 ("Yes, I am a bad person...", ""),
+                 ("No, of course not!", "TitleScene"))
 
 class MenuItem:
-    def __init__(self, name, font=None, font_size=21,
-                 font_color=color_lib["white"], scene=""):
+    def __init__(self, name, font=default_font, font_size=default_font_size,
+                 font_color=default_font_color, scene=""):
         self.name = name
         self.font = font
         self.font_size = font_size
         self.font_color = font_color
+        self.scene = scene
 
         self.text = load_text(name, self.font, self.font_size, self.font_color)
 
@@ -79,8 +81,6 @@ class MenuItem:
         self.height = self.text.get_height()
         self.posx = 0
         self.posy = 0
-
-        self.scene = scene
 
     def SetPos(self, posx, posy):
         self.posx = posx
@@ -95,14 +95,14 @@ class MenuItem:
 
 class TitleScene(SceneBase):
     def __init__(self, screen):
-        global default_font, color_lib, _menu_items
+        global _title_items
 
         SceneBase.__init__(self, screen)
 
         self.font = default_font
-        self.title_font_size = 72
-        self.item_font_size = 50
-        self.font_color = color_lib["black"]
+        self.header_font_size = default_header_font_size
+        self.item_font_size = default_font_size
+        self.font_color = default_font_color
         self.items = []
 
         # For the aesthetical layout, we add a spacing before the title
@@ -114,17 +114,17 @@ class TitleScene(SceneBase):
         # between the menu items
         offset = spacing
         # Exclude the title from the count of menu items
-        item_cnt = len(_menu_items)-1
+        item_cnt = len(_title_items)-1
 
         # Create and store menu items
-        for index, element in enumerate(_menu_items):
+        for index, element in enumerate(_title_items):
             name = element[0]
             scene = element[1]
 
             # Render the text for current item
             font_size = self.item_font_size
             if index == 0:
-                font_size = self.title_font_size
+                font_size = self.header_font_size
             label = MenuItem(name, self.font, font_size, self.font_color, scene)
 
             # Center horizontally on the screen, and init vertical position
@@ -160,8 +160,6 @@ class TitleScene(SceneBase):
         pass
 
     def Render(self, screen):
-        global color_lib
-
         screen.fill(color_lib["orange"])
 
         for label in self.items:
@@ -169,7 +167,7 @@ class TitleScene(SceneBase):
 
 class QuitScene(SceneBase):
     def __init__(self, screen):
-        global default_font, color_lib, _quit_items
+        global _quit_items
 
         SceneBase.__init__(self, screen)
 
@@ -180,9 +178,9 @@ class QuitScene(SceneBase):
                        screen.get_height()//2)
 
         self.font = default_font
-        self.title_font_size = 72
-        self.item_font_size = 50
-        self.font_color = color_lib["black"]
+        self.header_font_size = default_header_font_size
+        self.item_font_size = default_font_size
+        self.font_color = default_font_color
         self.items = []
 
         # For the aesthetical layout, we add a spacing before the title
@@ -204,7 +202,7 @@ class QuitScene(SceneBase):
             # Render the text for current item
             font_size = self.item_font_size
             if index == 0:
-                font_size = self.title_font_size
+                font_size = self.header_font_size
             label = MenuItem(name, self.font, font_size, self.font_color, scene)
 
             # Center horizontally on the screen, and init vertical position
@@ -243,8 +241,6 @@ class QuitScene(SceneBase):
         pass
 
     def Render(self, screen):
-        global color_lib
-
         screen.fill(color_lib["purple"], self.window)
 
         for label in self.items:
@@ -265,8 +261,6 @@ class OptionsScene(SceneBase):
         pass
 
     def Render(self, screen):
-        global default_font, color_lib
-
         screen.fill(color_lib["forest"])
 
         label = MenuItem("The cake is a lie!", default_font, 72, color_lib["white"])
@@ -307,10 +301,10 @@ class Bunny:
         global mov_lib_r
 
         if start_movement:
-            if ((self.moving_dir + direction) in mov_lib_r):
+            if ((self.moving_dir + direction) in mov_lib_r) :
                 self.moving_dir += direction
         else:
-            if ((self.moving_dir - direction) in mov_lib_r):
+            if ((self.moving_dir - direction) in mov_lib_r) :
                 self.moving_dir -= direction
 
     def move(self, posx_delta, posy_delta):
@@ -377,8 +371,6 @@ class GameScene(SceneBase):
         self.bunny.force_boundaries(screen)
 
     def Render(self, screen):
-        global color_lib
-
         screen.fill(color_lib["royalblue"])
         pygame.draw.rect(screen, color_lib["neon"], pygame.Rect(self.bunny.posx, self.bunny.posy, self.bunny.width, self.bunny.height),1)
         screen.blit(self.bunny.look, (self.bunny.posx, self.bunny.posy))
