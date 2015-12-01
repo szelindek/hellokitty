@@ -7,12 +7,8 @@ EASY WAY TO PRINT TEXT:
     # label.SetPos(posx, posy)
     # screen.blit(label.text, (label.posx, label.posy))
 
-util_chimpy:
-    derive from Sprite class
-    create RenderPlain==Group class -> sprite handling easier
-util_functions:
-    keyboard control for menu
-    key combo fix -> left HOLD, right HOLD, left RELEASE -> won't move right
+
+
 
 write C extensions
 
@@ -29,8 +25,20 @@ Physics:
     inputs apply forces
     no inertia?
 
+Header-öket le kell kezelni a menüben billentyűkkel lépegetésnél
+
+util_chimpy:
+    derive from Sprite class
+    create RenderPlain==Group class -> sprite handling easier
+Derive from Sprite class:
+Can use „allsprites” or similar, to call the update() func of all sprites at once, and draw them at once
+
+Options menü: entert ütve meghív egy függvényt, ami megcsinálj a param állítást (mondjuk felbontás) aztán visszatér a hívó „self”-fel így nem változik a scene
+
 TEST:
-    
+    működik-e az ESCAPE, ENTER, nyilak
+    key combo fix -> left HOLD, right HOLD, left RELEASE -> won't move right
+    Fix windowed menu position (for quitscene)
 """
 
 import os
@@ -56,20 +64,19 @@ class TitleScene(SceneBase, MenuBase):
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
         MenuBase.__init__(self, screen, _title_items)
 
-    def ProcessInput(self, events, pressed_keys):
+    def ProcessInput(self, screen, events, pressed_keys):
         for event in events:
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mouse_pos = pygame.mouse.get_pos()
-                for label in self.items:
-                    if label.IsMouseHovered(mouse_pos):
-                        return label.scene
+            if event.type == pygame.KEYDOWN:
+                return self.HandleKeyboard(screen, event.key)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                return self.HandleMouse(event.button)
         return self.__class__.__name__
 
     def Update(self, screen):
         pass
 
     def Render(self, screen):
-        MenuBase.BlitMenu(self, screen, color_lib["orange"])
+        self.BlitMenu(screen, color_lib["orange"])
 
 class QuitScene(SceneBase, MenuBase):
     def __init__(self, screen):
@@ -77,23 +84,19 @@ class QuitScene(SceneBase, MenuBase):
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
         MenuBase.__init__(self, screen, _quit_items, font_size=35, header_font_size=50, spacing_ratio=25)
 
-    def ProcessInput(self, events, pressed_keys):
+    def ProcessInput(self, screen, events, pressed_keys):
         for event in events:
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                # Move back to title scene when escape is pressed
-                return "TitleScene"
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mouse_pos = pygame.mouse.get_pos()
-                for label in self.items:
-                    if label.IsMouseHovered(mouse_pos):
-                        return label.scene
+            if event.type == pygame.KEYDOWN:
+                return self.HandleKeyboard(screen, event.key)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                return self.HandleMouse(event.button)
         return self.__class__.__name__
 
     def Update(self, screen):
         pass
 
     def Render(self, screen):
-        MenuBase.BlitMenu(self, screen, color_lib["dark_orange"])
+        self.BlitMenu(screen, color_lib["dark_orange"])
 
 class OptionsScene(SceneBase, MenuBase):
     def __init__(self, screen):
@@ -101,23 +104,19 @@ class OptionsScene(SceneBase, MenuBase):
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
         MenuBase.__init__(self, screen, _option_items, font_size=40)
 
-    def ProcessInput(self, events, pressed_keys):
+    def ProcessInput(self, screen, events, pressed_keys):
         for event in events:
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                # Move back to title scene when escape is pressed
-                return "TitleScene"
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mouse_pos = pygame.mouse.get_pos()
-                for label in self.items:
-                    if label.IsMouseHovered(mouse_pos):
-                        return label.scene
+            if event.type == pygame.KEYDOWN:
+                return self.HandleKeyboard(screen, event.key)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                return self.HandleMouse(event.button)
         return self.__class__.__name__
 
     def Update(self, screen):
         pass
 
     def Render(self, screen):
-        MenuBase.BlitMenu(self, screen, color_lib["forest"])
+        self.BlitMenu(screen, color_lib["forest"])
 
 class Bunny:
     def __init__(self, posx, posy, screen):
@@ -134,7 +133,7 @@ class Bunny:
         scaled_width = screen.get_width() // 16
         self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(ratio*scaled_width)))
 
-        # Update rect, which is changed due to scaling. 
+        # Update rect, which is changed due to scaling.
         # The real posy of the bunny is derived from the posy of the ground (input)
         self.rect = pygame.Rect(posx, posy-self.look.get_height(), self.look.get_width(), self.look.get_height())
 
@@ -179,7 +178,7 @@ class GameScene(SceneBase):
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
 
         pygame.mouse.set_visible(False)
-        
+
         # Define background settings
         self.ground = pygame.Rect(0, screen.get_height() * 5 // 6, screen.get_width(), screen.get_height() // 6)
 
@@ -188,7 +187,7 @@ class GameScene(SceneBase):
                            self.ground.y,
                            screen)
 
-    def ProcessInput(self, events, pressed_keys):
+    def ProcessInput(self, screen, events, pressed_keys):
         for event in events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 # Move back to title scene when escape is pressed
@@ -224,7 +223,7 @@ class GameScene(SceneBase):
         screen.fill(color_lib["royalblue"], self.window)
 
         screen.fill(color_lib["spring"], self.ground)
-        
+
         #pygame.draw.rect(screen, color_lib["neon"],pygame.Rect(self.bunny.rect.x, self.bunny.rect.y, self.bunny.rect.w, self.bunny.rect.h),1)
         screen.blit(self.bunny.look, (self.bunny.rect.x, self.bunny.rect.y))
 
@@ -269,7 +268,7 @@ def main(width, height, fps):
 
     clock = pygame.time.Clock()
     active_scene = TitleScene(screen)
-    
+
     while True:
         filtered_events = []
         pressed_keys = pygame.key.get_pressed()
@@ -283,7 +282,7 @@ def main(width, height, fps):
             else:
                 filtered_events.append(event)
 
-        next_scene = active_scene.ProcessInput(filtered_events, pressed_keys)
+        next_scene = active_scene.ProcessInput(screen, filtered_events, pressed_keys)
         if next_scene == "":
             # If the next scene name is empty string, then quit
             return

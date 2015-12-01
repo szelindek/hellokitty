@@ -178,9 +178,10 @@ def load_text(text, font, size, color):
 ################################ CLASS TEMPLATES ###############################
 
 class MenuItem:
-    def __init__(self, name, font=default_font, font_size=default_font_size,
+    def __init__(self, name, isheader, font=default_font, font_size=default_font_size,
                  font_color=default_font_color, scene=""):
         self.name = name
+        self.isheader = isheader
         self.font = font
         self.font_size = font_size
         self.font_color = font_color
@@ -208,12 +209,14 @@ class MenuBase:
     def __init__(self, screen, item_list, font=default_font,
     font_size=default_font_size, header_font_size=default_header_font_size,
     font_color=default_font_color, spacing_ratio=50):
-        
+
         self.font = font
         self.font_size = font_size
         self.header_font_size = header_font_size
         self.font_color = font_color
         self.items = []
+        self.cur_item = None
+        self.cur_rect = None
 
         # For the aesthetical layout, we add a spacing before the title
         # and between the menu options
@@ -239,7 +242,7 @@ class MenuBase:
             font_size = self.font_size
             if isheader:
                 font_size = self.header_font_size
-            label = MenuItem(name, self.font, font_size, self.font_color, scene)
+            label = MenuItem(name, isheader, self.font, font_size, self.font_color, scene)
 
             # Center horizontally on the screen, and init vertical position
             # with the current offset
@@ -267,13 +270,50 @@ class MenuBase:
         screen.fill(background_color, self.window)
         for label in self.items:
             screen.blit(label.text, (label.posx, label.posy))
+        if self.cur_rect != None:
+            pygame.draw.rect(screen, color_lib["black"], self.cur_rect, 1)
+
+    def HandleKeyboard(self, screen, key):
+        if key == pygame.K_ESCAPE:
+            return "TitleScene"
+        elif (key == pygame.K_SPACE or key == pygame.K_RETURN) and self.cur_item != None:
+            return self.items[self.cur_item].scene
+        elif key == pygame.K_UP or key == pygame.K_DOWN:
+            # Find the chosen item
+            if key == pygame.K_UP:
+                if self.cur_item == None or self.cur_item == 0:
+                    self.cur_item = len(self.items) - 1
+                elif self.cur_item > 0:
+
+                    self.cur_item -= 1
+            elif key == pygame.K_DOWN:
+                if self.cur_item == None or self.cur_item == len(self.items) - 1:
+                    self.cur_item = 0
+                elif self.cur_item < len(self.items) - 1:
+                    self.cur_item += 1
+
+            self.cur_rect = pygame.Rect(self.items[self.cur_item].posx,
+                self.items[self.cur_item].posy,
+                self.items[self.cur_item].width,
+                self.items[self.cur_item].height)
+
+        return self.__class__.__name__
+
+    def HandleMouse(self, button):
+        if button == 1:
+            mouse_pos = pygame.mouse.get_pos()
+            for label in self.items:
+                if label.IsMouseHovered(mouse_pos):
+                    return label.scene
+
+        return self.__class__.__name__
 
 class SceneBase:
     def __init__(self, screen, window):
         self.window = window
         pygame.mouse.set_visible(True)
 
-    def ProcessInput(self, events, pressed_keys):
+    def ProcessInput(self, screen, events, pressed_keys):
         """Receives all events occured since last frame and
            keys being currently pressed. React to them here."""
         print("Forget to override this in the child class!")
@@ -286,3 +326,8 @@ class SceneBase:
     def Render(self, screen):
         """Update screen, render new frame and show to the user."""
         print("Forget to override this in the child class!")
+
+################################ CHECK LOAD TYPE ###############################
+
+if __name__ == "__main__":
+    print ("LIBFALCON.PY should be imported as a library!!!")
