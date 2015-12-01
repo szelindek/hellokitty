@@ -7,9 +7,6 @@ EASY WAY TO PRINT TEXT:
     # label.SetPos(posx, posy)
     # screen.blit(label.text, (label.posx, label.posy))
 
-
-
-
 write C extensions
 
 Animation:
@@ -25,18 +22,14 @@ Physics:
     inputs apply forces
     no inertia?
 
-Header-öket le kell kezelni a menüben billentyűkkel lépegetésnél
-
 util_chimpy:
     derive from Sprite class
     create RenderPlain==Group class -> sprite handling easier
-Derive from Sprite class:
-Can use „allsprites” or similar, to call the update() func of all sprites at once, and draw them at once
+    Can use „allsprites” or similar, to call the update() func of all sprites at once, and draw them at once
 
 Options menü: entert ütve meghív egy függvényt, ami megcsinálj a param állítást (mondjuk felbontás) aztán visszatér a hívó „self”-fel így nem változik a scene
 
 TEST:
-    működik-e az ESCAPE, ENTER, nyilak
     key combo fix -> left HOLD, right HOLD, left RELEASE -> won't move right
     Fix windowed menu position (for quitscene)
 """
@@ -50,16 +43,19 @@ from libfalcon import *
 # Empty scene means exit
 _title_items  = (("Bunny hop", "TitleScene", True), ("Start game", "GameScene", False),
                  ("Options", "OptionsScene", False), ("Quit", "QuitScene", False))
-_option_items = (("Options", "OptionsScene", True), ("Resolution", "OptionsScene", False),
-                 ("Fullscreen", "OptionsScene", False), ("Keys", "OptionsScene", False),
+_option_items = (("Options", "OptionsScene", True), ("Resolution", "ChangeResolution", False),
+                 ("Fullscreen", "ToggleFullscreen", False), ("Keys", "OptionsScene", False),
                  ("Mute sounds", "OptionsScene", False))
 _quit_items   = (("Do you really want to", "QuitScene", True),
                  ("leave the bunny alone?", "QuitScene", True),
                  ("Yes! I am a bad person...", "", False),
                  ("No, of course not!", "TitleScene", False))
+_resolutions = ((640,360),(960,540))
+_active_res = 0
+_fullscreen = 0
 
 class TitleScene(SceneBase, MenuBase):
-    def __init__(self, screen):
+    def __init__(self, screen, active_scene=None):
         SceneBase.__init__(self, screen,
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
         MenuBase.__init__(self, screen, _title_items)
@@ -79,7 +75,7 @@ class TitleScene(SceneBase, MenuBase):
         self.BlitMenu(screen, color_lib["orange"])
 
 class QuitScene(SceneBase, MenuBase):
-    def __init__(self, screen):
+    def __init__(self, screen, active_scene=None):
         SceneBase.__init__(self, screen,
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
         MenuBase.__init__(self, screen, _quit_items, font_size=35, header_font_size=50, spacing_ratio=25)
@@ -98,8 +94,32 @@ class QuitScene(SceneBase, MenuBase):
     def Render(self, screen):
         self.BlitMenu(screen, color_lib["dark_orange"])
 
+def ChangeResolution(screen, active_scene):
+    global _active_res
+
+    if _active_res == len(_resolutions) - 1:
+        _active_res = 0
+    else:
+        _active_res += 1
+
+    pygame.display.set_mode(_resolutions[_active_res],_fullscreen)
+
+    return OptionsScene(screen)
+
+def ToggleFullscreen(screen, active_scene):
+    global _fullscreen
+
+    if _fullscreen == 0:
+        _fullscreen = pygame.FULLSCREEN
+    else:
+        _fullscreen = 0
+
+    pygame.display.set_mode(_resolutions[_active_res],_fullscreen)
+
+    return OptionsScene(screen)
+
 class OptionsScene(SceneBase, MenuBase):
-    def __init__(self, screen):
+    def __init__(self, screen, active_scene=None):
         SceneBase.__init__(self, screen,
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
         MenuBase.__init__(self, screen, _option_items, font_size=40)
@@ -173,7 +193,7 @@ class Bunny:
             self.rect.y = screen.get_height() - self.rect.h
 
 class GameScene(SceneBase):
-    def __init__(self, screen):
+    def __init__(self, screen, active_scene=None):
         SceneBase.__init__(self, screen,
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
 
@@ -227,7 +247,7 @@ class GameScene(SceneBase):
         #pygame.draw.rect(screen, color_lib["neon"],pygame.Rect(self.bunny.rect.x, self.bunny.rect.y, self.bunny.rect.w, self.bunny.rect.h),1)
         screen.blit(self.bunny.look, (self.bunny.rect.x, self.bunny.rect.y))
 
-def main(width, height, fps):
+def main(fps):
     pygame.init()
 
     # Create new cursor from 'cursor_string', where the hotspot is (23,0)
@@ -264,12 +284,14 @@ def main(width, height, fps):
     # Create graphical window
     pygame.display.set_caption("Bunny hop")
     pygame.display.set_icon(load_image(os.path.join(image_dir,"bunny_256.png")))
-    screen = pygame.display.set_mode((width, height))
+    screen = pygame.display.set_mode((_resolutions[_active_res][0],
+        _resolutions[_active_res][1]))
 
     clock = pygame.time.Clock()
-    active_scene = TitleScene(screen)
+    next_scene = TitleScene(screen)
 
     while True:
+        active_scene = next_scene
         filtered_events = []
         pressed_keys = pygame.key.get_pressed()
 
@@ -282,21 +304,29 @@ def main(width, height, fps):
             else:
                 filtered_events.append(event)
 
-        next_scene = active_scene.ProcessInput(screen, filtered_events, pressed_keys)
-        if next_scene == "":
-            # If the next scene name is empty string, then quit
-            return
-        elif next_scene == active_scene.__class__.__name__ :
-            # Don't need to change the scene, we can continue normally
-            active_scene.Update(screen)
-            active_scene.Render(screen)
-        else:
-            # Initialize new scene, call the right init function
-            active_scene = globals()[next_scene](screen)
+        # Work on those inputs
+        action = active_scene.ProcessInput(screen, filtered_events, pressed_keys)
 
+        # If the next scene name is empty string, then quit
+        if action == "":
+            return
+
+        # Execute action, update next_scene and screen
+        if action != active_scene.__class__.__name__:
+            next_scene = globals()[action](screen, active_scene)
+            screen = pygame.display.get_surface()
+
+        # Update active_scene for next iteration of the loop
+        active_scene = next_scene
+
+        # Update the logic and render new screen
+        active_scene.Update(screen)
+        active_scene.Render(screen)
+
+        # Show newly rendered stuff to user and keep fps
         pygame.display.flip()
         clock.tick(fps)
 
 # Execute main function only after the whole script was parsed
 if __name__ == "__main__":
-    main(640, 360, 60)
+    main(60)

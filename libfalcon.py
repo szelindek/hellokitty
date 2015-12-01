@@ -180,7 +180,7 @@ def load_text(text, font, size, color):
 class MenuElem:
     def __init__(self, name, font=default_font, font_size=default_font_size,
     font_color=default_font_color, scene=""):
-    
+
         self.name = name
         self.font = font
         self.font_size = font_size
@@ -264,7 +264,7 @@ class MenuBase:
 
             # Update label position
             label.SetPos(posx, posy)
-            
+
             # Store in one of the two groups (headers, items)
             if isheader:
                 self.headers.append(label)
