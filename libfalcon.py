@@ -177,11 +177,11 @@ def load_text(text, font, size, color):
 
 ################################ CLASS TEMPLATES ###############################
 
-class MenuItem:
-    def __init__(self, name, isheader, font=default_font, font_size=default_font_size,
-                 font_color=default_font_color, scene=""):
+class MenuElem:
+    def __init__(self, name, font=default_font, font_size=default_font_size,
+    font_color=default_font_color, scene=""):
+    
         self.name = name
-        self.isheader = isheader
         self.font = font
         self.font_size = font_size
         self.font_color = font_color
@@ -214,6 +214,7 @@ class MenuBase:
         self.font_size = font_size
         self.header_font_size = header_font_size
         self.font_color = font_color
+        self.headers = []
         self.items = []
         self.cur_item = None
         self.cur_rect = None
@@ -242,7 +243,7 @@ class MenuBase:
             font_size = self.font_size
             if isheader:
                 font_size = self.header_font_size
-            label = MenuItem(name, isheader, self.font, font_size, self.font_color, scene)
+            label = MenuElem(name, self.font, font_size, self.font_color, scene)
 
             # Center horizontally on the screen, and init vertical position
             # with the current offset
@@ -256,18 +257,24 @@ class MenuBase:
                 # The screen height virtually decreased with the offset,
                 # the height of each menu item virtually increased with the spacing,
                 # and index is decremented, because the title is excluded from indexing
-                posy += get_center((self.window.h - offset),
-                            (item_cnt * (label.height + spacing))) + \
+                posy += get_center((self.window.h - offset),(item_cnt * (label.height + spacing))) + \
                         ((index-(len(item_list)-item_cnt)) * (label.height + spacing)) + self.window.y
                 # Increase offset for "not title" menu items with height of spacings inbetween
                 offset += spacing
 
-            # Update label position and store label
+            # Update label position
             label.SetPos(posx, posy)
-            self.items.append(label)
+            
+            # Store in one of the two groups (headers, items)
+            if isheader:
+                self.headers.append(label)
+            else:
+                self.items.append(label)
 
     def BlitMenu(self, screen, background_color):
         screen.fill(background_color, self.window)
+        for label in self.headers:
+            screen.blit(label.text, (label.posx, label.posy))
         for label in self.items:
             screen.blit(label.text, (label.posx, label.posy))
         if self.cur_rect != None:
@@ -276,22 +283,22 @@ class MenuBase:
     def HandleKeyboard(self, screen, key):
         if key == pygame.K_ESCAPE:
             return "TitleScene"
-        elif (key == pygame.K_SPACE or key == pygame.K_RETURN) and self.cur_item != None:
+        elif (key == pygame.K_SPACE or key == pygame.K_RETURN) and \
+        self.cur_item != None:
             return self.items[self.cur_item].scene
         elif key == pygame.K_UP or key == pygame.K_DOWN:
-            # Find the chosen item
+            # Move the item selection
             if key == pygame.K_UP:
                 if self.cur_item == None or self.cur_item == 0:
                     self.cur_item = len(self.items) - 1
                 elif self.cur_item > 0:
-
                     self.cur_item -= 1
             elif key == pygame.K_DOWN:
                 if self.cur_item == None or self.cur_item == len(self.items) - 1:
                     self.cur_item = 0
                 elif self.cur_item < len(self.items) - 1:
                     self.cur_item += 1
-
+            # Update the rect which is drawn around the currently selected item
             self.cur_rect = pygame.Rect(self.items[self.cur_item].posx,
                 self.items[self.cur_item].posy,
                 self.items[self.cur_item].width,
