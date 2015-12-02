@@ -179,13 +179,13 @@ def load_text(text, font, size, color):
 
 class MenuElem:
     def __init__(self, name, font=default_font, font_size=default_font_size,
-    font_color=default_font_color, scene=""):
+    font_color=default_font_color, action=""):
 
         self.name = name
         self.font = font
         self.font_size = font_size
         self.font_color = font_color
-        self.scene = scene
+        self.action = action
 
         self.text = load_text(name, self.font, self.font_size, self.font_color)
 
@@ -206,7 +206,7 @@ class MenuElem:
         return False
 
 class MenuBase:
-    def __init__(self, screen, item_list, font=default_font,
+    def __init__(self, screen, header_list, item_list, font=default_font,
     font_size=default_font_size, header_font_size=default_header_font_size,
     font_color=default_font_color, spacing_ratio=50):
 
@@ -219,57 +219,60 @@ class MenuBase:
         self.cur_item = None
         self.cur_rect = None
 
-        # For the aesthetical layout, we add a spacing before the title
-        # and between the menu options
+        # For the aesthetical layout, we add a spacing before the headers
+        # and between the menu options as well
         spacing = self.window.h // spacing_ratio
-        # For the title, the offset is the spacing above it, but for
+        # For the headers, the offset is the spacing above them, but for
         # the other menu items, it will be increased with the height
-        # of the title and with future spacings which will be put
+        # of the headers and with future spacings which will be put
         # between the menu items
         offset = spacing
-        # Exclude the headers from the count of menu items
-        item_cnt = 0
-        for element in item_list:
-            if element[2] == False:
-                item_cnt += 1
 
         # Create and store menu items
-        for index, element in enumerate(item_list):
-            name = element[0]
-            scene = element[1]
-            isheader = element[2]
-
+        for name in header_list:
             # Render the text for current item
-            font_size = self.font_size
-            if isheader:
-                font_size = self.header_font_size
-            label = MenuElem(name, self.font, font_size, self.font_color, scene)
+            label = MenuElem(name, self.font, self.header_font_size, self.font_color)
 
             # Center horizontally on the screen, and init vertical position
             # with the current offset
             posx = get_center(self.window.w, label.width) + self.window.x
             posy = offset
 
-            if isheader:
-                # Increase offset for "not header" menu items with height of the header
-                offset += label.height
-            else :
-                # The screen height virtually decreased with the offset,
-                # the height of each menu item virtually increased with the spacing,
-                # and index is decremented, because the title is excluded from indexing
-                posy += get_center((self.window.h - offset),(item_cnt * (label.height + spacing))) + \
-                        ((index-(len(item_list)-item_cnt)) * (label.height + spacing)) + self.window.y
-                # Increase offset for "not title" menu items with height of spacings inbetween
-                offset += spacing
+            # Update label position
+            label.SetPos(posx, posy)
+
+            # Increase offset for non-header menu items with height of the header
+            offset += label.height
+
+            # Store
+            self.headers.append(label)
+
+        # Create and store menu items
+        for index, item in enumerate(item_list):
+            name = item[0]
+            action = item[1]
+
+            # Render the text for current item
+            label = MenuElem(name, self.font, self.font_size, self.font_color, action)
+
+            # Center horizontally on the screen, and init vertical position
+            # with the current offset
+            posx = get_center(self.window.w, label.width) + self.window.x
+            # The screen height virtually decreased with the offset,
+            # the height of each menu item virtually increased with the spacing,
+            # and index is decremented, because the title is excluded from indexing
+            posy = offset + \
+                get_center((self.window.h - offset),(len(item_list) * (label.height + spacing))) + \
+                (index * (label.height + spacing)) + self.window.y
 
             # Update label position
             label.SetPos(posx, posy)
 
-            # Store in one of the two groups (headers, items)
-            if isheader:
-                self.headers.append(label)
-            else:
-                self.items.append(label)
+            # Increase offset for next items
+            offset += spacing
+
+            # Store
+            self.items.append(label)
 
     def BlitMenu(self, screen, background_color):
         screen.fill(background_color, self.window)
@@ -285,7 +288,7 @@ class MenuBase:
             return "TitleScene"
         elif (key == pygame.K_SPACE or key == pygame.K_RETURN) and \
         self.cur_item != None:
-            return self.items[self.cur_item].scene
+            return self.items[self.cur_item].action
         elif key == pygame.K_UP or key == pygame.K_DOWN:
             # Move the item selection
             if key == pygame.K_UP:
@@ -311,7 +314,7 @@ class MenuBase:
             mouse_pos = pygame.mouse.get_pos()
             for label in self.items:
                 if label.IsMouseHovered(mouse_pos):
-                    return label.scene
+                    return label.action
 
         return self.__class__.__name__
 

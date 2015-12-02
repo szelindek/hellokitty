@@ -7,7 +7,9 @@ EASY WAY TO PRINT TEXT:
     # label.SetPos(posx, posy)
     # screen.blit(label.text, (label.posx, label.posy))
 
-write C extensions
+write C extensions:
+    collision detection
+    other heavy calculation
 
 Animation:
     store image of the background
@@ -27,7 +29,20 @@ util_chimpy:
     create RenderPlain==Group class -> sprite handling easier
     Can use „allsprites” or similar, to call the update() func of all sprites at once, and draw them at once
 
-Options menü: entert ütve meghív egy függvényt, ami megcsinálj a param állítást (mondjuk felbontás) aztán visszatér a hívó „self”-fel így nem változik a scene
+Options menu:
+    Actual value change should be done only when exiting (destroying?) Optionsscene
+    Display currently selected resolution and a tick mark for fullscreen
+    Add a tip text which explains that changes are automatically saved
+    Add background music + mute option (play or stop music) -> global var: _isplaying
+
+# A and B are derived from Rect class
+if A.x < B.x + B.w and A.x + A.w > B.x and A.y < B.y + B.h and A.y + A.h > B.y:
+    # Collision!
+
+#Circle class: r, x, y -> for radius, center-x, center-y
+# A and B are derived from Circle class
+if (A.x - B.x)*(A.x - B.x) + (A.y - B.y)*(A.y - B.y) < (A.r + B.r)*(A.r + B.r):
+    # Collision!
 
 TEST:
     key combo fix -> left HOLD, right HOLD, left RELEASE -> won't move right
@@ -39,17 +54,19 @@ import sys
 import pygame
 from libfalcon import *
 
-# Items of a menu: tuple of labels of the menu items and the scenes connected.
-# Empty scene means exit
-_title_items  = (("Bunny hop", "TitleScene", True), ("Start game", "GameScene", False),
-                 ("Options", "OptionsScene", False), ("Quit", "QuitScene", False))
-_option_items = (("Options", "OptionsScene", True), ("Resolution", "ChangeResolution", False),
-                 ("Fullscreen", "ToggleFullscreen", False), ("Keys", "OptionsScene", False),
-                 ("Mute sounds", "OptionsScene", False))
-_quit_items   = (("Do you really want to", "QuitScene", True),
-                 ("leave the bunny alone?", "QuitScene", True),
-                 ("Yes! I am a bad person...", "", False),
-                 ("No, of course not!", "TitleScene", False))
+# Each menu consists of one or more headers for the given scene and one or more
+# items which are the possible "buttons" to select. Each item has a second
+# parameter which is the name of the function to be called when the given item
+# is selected. Empty second parameter means to exit the whole program.
+_title_headers  = ("Bunny hop",)
+_title_items    = (("Start game", "GameScene"), ("Options", "OptionsScene"),
+                   ("Quit", "QuitScene"))
+_option_headers = ("Options",)
+_option_items   = (("Resolution", "ChangeResolution"), ("Fullscreen", "ToggleFullscreen"),
+                   ("Keys", "ChangeKeys"), ("Mute sounds", "ToggleSound"))
+_quit_headers   = ("Do you really want to", "leave the bunny alone?")
+_quit_items     = (("Yes! I am a bad person...", ""), ("No, of course not!", "TitleScene"))
+
 _resolutions = ((640,360),(960,540))
 _active_res = 0
 _fullscreen = 0
@@ -58,7 +75,7 @@ class TitleScene(SceneBase, MenuBase):
     def __init__(self, screen, active_scene=None):
         SceneBase.__init__(self, screen,
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
-        MenuBase.__init__(self, screen, _title_items)
+        MenuBase.__init__(self, screen, _title_headers, _title_items)
 
     def ProcessInput(self, screen, events, pressed_keys):
         for event in events:
@@ -78,7 +95,8 @@ class QuitScene(SceneBase, MenuBase):
     def __init__(self, screen, active_scene=None):
         SceneBase.__init__(self, screen,
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
-        MenuBase.__init__(self, screen, _quit_items, font_size=35, header_font_size=50, spacing_ratio=25)
+        MenuBase.__init__(self, screen, _quit_headers, _quit_items,
+            font_size=35, header_font_size=50, spacing_ratio=25)
 
     def ProcessInput(self, screen, events, pressed_keys):
         for event in events:
@@ -118,11 +136,18 @@ def ToggleFullscreen(screen, active_scene):
 
     return OptionsScene(screen)
 
+def ToggleSound(screen, active_scene):
+    return OptionsScene(screen)
+
+def ChangeKeys(screen, active_scene):
+    return OptionsScene(screen)
+
 class OptionsScene(SceneBase, MenuBase):
     def __init__(self, screen, active_scene=None):
         SceneBase.__init__(self, screen,
             pygame.Rect(0, 0, screen.get_width(), screen.get_height()))
-        MenuBase.__init__(self, screen, _option_items, font_size=40)
+        MenuBase.__init__(self, screen, _option_headers, _option_items,
+            font_size=40)
 
     def ProcessInput(self, screen, events, pressed_keys):
         for event in events:
