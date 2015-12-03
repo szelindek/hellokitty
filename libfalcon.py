@@ -329,11 +329,7 @@ class SceneBase:
         print("Forget to override this in the child class!")
         return self.__class__.__name__
 
-    def Update(self, screen):
-        """Game logic: updating flags and variables, move objects."""
-        print("Forget to override this in the child class!")
-
-    def Render(self, screen):
+    def GenerateOutput(self, screen):
         """Update screen, render new frame and show to the user."""
         print("Forget to override this in the child class!")
 

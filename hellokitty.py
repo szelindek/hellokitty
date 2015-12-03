@@ -24,11 +24,6 @@ Physics:
     inputs apply forces
     no inertia?
 
-util_chimpy:
-    derive from Sprite class
-    create RenderPlain==Group class -> sprite handling easier
-    Can use „allsprites” or similar, to call the update() func of all sprites at once, and draw them at once
-
 Options menu:
     Actual value change should be done only when exiting (destroying?) Optionsscene
     Display currently selected resolution and a tick mark for fullscreen
@@ -47,6 +42,8 @@ if (A.x - B.x)*(A.x - B.x) + (A.y - B.y)*(A.y - B.y) < (A.r + B.r)*(A.r + B.r):
 TEST:
     key combo fix -> left HOLD, right HOLD, left RELEASE -> won't move right
     Fix windowed menu position (for quitscene)
+    adjust bunny rect to be pixel-precise
+    check block rect and the gap between bunny and block
 """
 
 import os
@@ -68,8 +65,12 @@ _quit_headers   = ("Do you really want to", "leave the bunny alone?")
 _quit_items     = (("Yes! I am a bad person...", ""), ("No, of course not!", "TitleScene"))
 
 _resolutions = ((640,360),(960,540))
+# Index of the active res from _resolutions
 _active_res = 0
+# Constant value to set fullscreen mode via display.set_mode
 _fullscreen = 0
+#
+_isplayingsound = False
 
 class TitleScene(SceneBase, MenuBase):
     def __init__(self, screen, active_scene=None):
@@ -85,10 +86,7 @@ class TitleScene(SceneBase, MenuBase):
                 return self.HandleMouse(event.button)
         return self.__class__.__name__
 
-    def Update(self, screen):
-        pass
-
-    def Render(self, screen):
+    def GenerateOutput(self, screen):
         self.BlitMenu(screen, color_lib["orange"])
 
 class QuitScene(SceneBase, MenuBase):
@@ -106,10 +104,7 @@ class QuitScene(SceneBase, MenuBase):
                 return self.HandleMouse(event.button)
         return self.__class__.__name__
 
-    def Update(self, screen):
-        pass
-
-    def Render(self, screen):
+    def GenerateOutput(self, screen):
         self.BlitMenu(screen, color_lib["dark_orange"])
 
 def ChangeResolution(screen, active_scene):
@@ -137,6 +132,13 @@ def ToggleFullscreen(screen, active_scene):
     return OptionsScene(screen)
 
 def ToggleSound(screen, active_scene):
+    global _isplayingsound
+
+    if _isplayingsound == False:
+        _isplayingsound = True
+    else:
+        _isplayingsound = False
+
     return OptionsScene(screen)
 
 def ChangeKeys(screen, active_scene):
@@ -157,14 +159,13 @@ class OptionsScene(SceneBase, MenuBase):
                 return self.HandleMouse(event.button)
         return self.__class__.__name__
 
-    def Update(self, screen):
-        pass
-
-    def Render(self, screen):
+    def GenerateOutput(self, screen):
         self.BlitMenu(screen, color_lib["forest"])
 
-class Bunny:
+class Bunny(pygame.sprite.Sprite):
     def __init__(self, posx, posy, screen):
+        pygame.sprite.Sprite.__init__(self) #call Sprite initializer
+
         # Move 1/200 of the screen in each frame
         self.move_step = screen.get_width() // 200
 
@@ -194,14 +195,15 @@ class Bunny:
             if (self.moving_dir & ~direction) in mov_lib_r:
                 self.moving_dir &= ~direction
 
-    def UpdateCoordinates(self, posx_delta, posy_delta):
+    def UpdateCoordinates(self, posx_delta, posy_delta, update_facing_dir=False):
         """Change coordinates of the bunny, update the direction it's facing"""
         self.rect.x += posx_delta
         self.rect.y += posy_delta
 
         # If moving left but facing right, or moving right but facing left,
         # then flip the bunny look, to face in the direction of the movement
-        if (posx_delta < 0 and self.facing_right == True) or \
+        if update_facing_dir and \
+           (posx_delta < 0 and self.facing_right == True) or \
            (posx_delta > 0 and self.facing_right == False):
             self.look = pygame.transform.flip(self.look, True, False)
             self.facing_right = not self.facing_right
@@ -217,6 +219,40 @@ class Bunny:
         elif self.rect.y > screen.get_height() - self.rect.h:
             self.rect.y = screen.get_height() - self.rect.h
 
+class Ground(pygame.sprite.Sprite):
+    def __init__(self, posx, posy, screen):
+        pygame.sprite.Sprite.__init__(self) #call Sprite initializer
+
+        # Load bunny, it should be facing right by default
+        self.look = load_image(os.path.join(image_dir,"ground.png"))
+
+        # Scale the look of the bunny depending on the display resolution
+        self.rect = pygame.Rect(posx, posy, self.look.get_width(), self.look.get_height())
+        ratio = self.rect.h / self.rect.w
+        scaled_width = screen.get_width() // 10
+        self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(ratio*scaled_width)))
+
+        # Update rect, which is changed due to scaling.
+        # The real posy of the bunny is derived from the posy of the ground (input)
+        self.rect = pygame.Rect(posx, posy-self.look.get_height(), self.look.get_width(), self.look.get_height())
+
+class Block(pygame.sprite.Sprite):
+    def __init__(self, posx, posy, screen):
+        pygame.sprite.Sprite.__init__(self) #call Sprite initializer
+
+        # Load bunny, it should be facing right by default
+        self.look = load_image(os.path.join(image_dir,"block.png"))
+
+        # Scale the look of the bunny depending on the display resolution
+        self.rect = pygame.Rect(posx, posy, self.look.get_width(), self.look.get_height())
+        ratio = self.rect.h / self.rect.w
+        scaled_width = screen.get_width() // 10
+        self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(ratio*scaled_width)))
+
+        # Update rect, which is changed due to scaling.
+        # The real posy of the bunny is derived from the posy of the ground (input)
+        self.rect = pygame.Rect(posx, posy-self.look.get_height(), self.look.get_width(), self.look.get_height())
+
 class GameScene(SceneBase):
     def __init__(self, screen, active_scene=None):
         SceneBase.__init__(self, screen,
@@ -224,13 +260,35 @@ class GameScene(SceneBase):
 
         pygame.mouse.set_visible(False)
 
-        # Define background settings
-        self.ground = pygame.Rect(0, screen.get_height() * 5 // 6, screen.get_width(), screen.get_height() // 6)
+        # Create ground from small ground elements
+        self.ground_list = []
+        self.ground_cnt = 10
+
+        ground_x = 0
+        ground_y = screen.get_height()
+        for i in range(self.ground_cnt):
+            self.ground_list.append(Ground(ground_x, ground_y, screen))
+            ground_x += self.ground_list[-1].rect.w
+
+        # Create a bunny
+        self.block = Block(screen.get_width() // 2,
+                           self.ground_list[0].rect.y,
+                           screen)
 
         # Create a bunny
         self.bunny = Bunny(screen.get_width() // 20,
-                           self.ground.y,
+                           self.ground_list[0].rect.y,
                            screen)
+
+        self.allsprites = pygame.sprite.Group(self.ground_list, self.block)
+
+    def CheckCollision(self, A):
+        for cur_sprite in self.allsprites:
+            B = cur_sprite.rect
+            if (A.x < B.x + B.w) and (A.x + A.w > B.x) and \
+               (A.y < B.y + B.h) and (A.y + A.h > B.y):
+                return True
+        return False
 
     def ProcessInput(self, screen, events, pressed_keys):
         for event in events:
@@ -251,25 +309,40 @@ class GameScene(SceneBase):
         while tmp:
             if tmp % 2:
                 direction = 2 ** pow_2
-                if "left" == mov_lib_r[direction]:
-                    self.bunny.UpdateCoordinates(-self.bunny.move_step,0)
-                elif "right" == mov_lib_r[direction]:
-                    self.bunny.UpdateCoordinates(self.bunny.move_step,0)
-                elif "up" == mov_lib_r[direction]:
-                    self.bunny.UpdateCoordinates(0,-self.bunny.move_step)
-                elif "down" == mov_lib_r[direction]:
-                    self.bunny.UpdateCoordinates(0,self.bunny.move_step)
+
+                # Short alias to rectangle of the bunny
+                A = self.bunny.rect
+                # Move the bunny in the desired direction only if there's no collision
+                if "left" == mov_lib_r[direction] and \
+                   not self.CheckCollision(pygame.Rect(A.x-self.bunny.move_step,A.y,A.w,A.h)):
+                    self.bunny.UpdateCoordinates(-self.bunny.move_step,0,True)
+                elif "right" == mov_lib_r[direction] and \
+                   not self.CheckCollision(pygame.Rect(A.x+self.bunny.move_step,A.y,A.w,A.h)):
+                    self.bunny.UpdateCoordinates(self.bunny.move_step,0,True)
+                elif "up" == mov_lib_r[direction] and \
+                   not self.CheckCollision(pygame.Rect(A.x,A.y-self.bunny.move_step,A.w,A.h)):
+                    self.bunny.UpdateCoordinates(0,-self.bunny.move_step,True)
+                elif "down" == mov_lib_r[direction] and \
+                   not self.CheckCollision(pygame.Rect(A.x,A.y+self.bunny.move_step,A.w,A.h)):
+                    self.bunny.UpdateCoordinates(0,self.bunny.move_step,True)
             pow_2 += 1
             tmp = tmp // 2
         # Check the position on both axles
         self.bunny.ForceBoundaries(screen)
 
-    def Render(self, screen):
+    def GenerateOutput(self, screen):
+        self.Update(screen)
+
         screen.fill(color_lib["royalblue"], self.window)
 
-        screen.fill(color_lib["spring"], self.ground)
+        for ground in self.ground_list:
+            screen.blit(ground.look, (ground.rect.x, ground.rect.y))
+            pygame.draw.rect(screen, color_lib["purple"], ground.rect, 1)
 
-        #pygame.draw.rect(screen, color_lib["neon"],pygame.Rect(self.bunny.rect.x, self.bunny.rect.y, self.bunny.rect.w, self.bunny.rect.h),1)
+        screen.blit(self.block.look, (self.block.rect.x, self.block.rect.y))
+        pygame.draw.rect(screen, color_lib["cyan"], self.block.rect, 1)
+
+        pygame.draw.rect(screen, color_lib["neon"], self.bunny.rect, 1)
         screen.blit(self.bunny.look, (self.bunny.rect.x, self.bunny.rect.y))
 
 def main(fps):
@@ -345,8 +418,7 @@ def main(fps):
         active_scene = next_scene
 
         # Update the logic and render new screen
-        active_scene.Update(screen)
-        active_scene.Render(screen)
+        active_scene.GenerateOutput(screen)
 
         # Show newly rendered stuff to user and keep fps
         pygame.display.flip()
