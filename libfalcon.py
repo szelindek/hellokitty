@@ -179,7 +179,7 @@ def load_text(text, font, size, color):
 
 class MenuElem:
     def __init__(self, name, font=default_font, font_size=default_font_size,
-    font_color=default_font_color, action=""):
+                 font_color=default_font_color, action=""):
 
         self.name = name
         self.font = font
@@ -207,8 +207,8 @@ class MenuElem:
 
 class MenuBase:
     def __init__(self, screen, header_list, item_list, font=default_font,
-    font_size=default_font_size, header_font_size=default_header_font_size,
-    font_color=default_font_color, spacing_ratio=50):
+                 font_size=default_font_size, header_font_size=default_header_font_size,
+                 font_color=default_font_color, spacing_ratio=50):
 
         self.font = font
         self.font_size = font_size
@@ -318,10 +318,32 @@ class MenuBase:
 
         return self.__class__.__name__
 
+class SpriteBase(pygame.sprite.Sprite):
+    def __init__(self, look_image, scaling, posx, posy, screen):
+        pygame.sprite.Sprite.__init__(self)
+
+        # Load image to get a fancy look
+        self.look = load_image(os.path.join(image_dir, look_image))
+
+        # Scale the look depending on the display resolution
+        ratio = self.look.get_height() / self.look.get_width()
+        scaled_width = screen.get_width() // scaling
+        self.look = pygame.transform.smoothscale(self.look,
+                    (scaled_width, int(ratio*scaled_width)))
+
+        # Get rect!
+        # The stored posy (upper-left corner) is derived from the input argument
+        # posy, which is the bottom-left corner. The upper-left corner posy.
+        # can't be given as input because the height of the sprite is not known
+        # in advance!
+        self.rect = pygame.Rect(posx, posy-self.look.get_height(),
+                    self.look.get_width(), self.look.get_height())
+
 class SceneBase:
     def __init__(self, screen, window):
         self.window = window
         pygame.mouse.set_visible(True)
+        pygame.key.set_repeat()
 
     def ProcessInput(self, screen, events, pressed_keys):
         """Receives all events occured since last frame and

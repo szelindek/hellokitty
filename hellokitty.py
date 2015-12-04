@@ -7,9 +7,7 @@ EASY WAY TO PRINT TEXT:
     # label.SetPos(posx, posy)
     # screen.blit(label.text, (label.posx, label.posy))
 
-write C extensions:
-    collision detection
-    other heavy calculation
+C extensions?
 
 Animation:
     store image of the background
@@ -40,10 +38,11 @@ if (A.x - B.x)*(A.x - B.x) + (A.y - B.y)*(A.y - B.y) < (A.r + B.r)*(A.r + B.r):
     # Collision!
 
 TEST:
-    key combo fix -> left HOLD, right HOLD, left RELEASE -> won't move right
+    left HOLD, right HOLD, left RELEASE -> won't move right -> generate multiple keydown events when pressed?
     Fix windowed menu position (for quitscene)
     adjust bunny rect to be pixel-precise
     check block rect and the gap between bunny and block
+    include todo.txt here
 """
 
 import os
@@ -162,28 +161,17 @@ class OptionsScene(SceneBase, MenuBase):
     def GenerateOutput(self, screen):
         self.BlitMenu(screen, color_lib["forest"])
 
-class Bunny(pygame.sprite.Sprite):
-    def __init__(self, posx, posy, screen):
-        pygame.sprite.Sprite.__init__(self) #call Sprite initializer
+class Bunny(SpriteBase):
+    def __init__(self, look_image, scaling, posx, posy, screen):
+        SpriteBase.__init__(self, look_image, scaling, posx, posy, screen)
 
-        # Move 1/200 of the screen in each frame
+        # Move 1/200 of the screen in each frame -> this is speed (pixel/frame)
         self.move_step = screen.get_width() // 200
 
-        # Load bunny, it should be facing right by default
-        self.look = load_image(os.path.join(image_dir,"bunny_look.png"))
+        # Bunny should be facing right by default
         self.facing_right = True
 
-        # Scale the look of the bunny depending on the display resolution
-        self.rect = pygame.Rect(posx, posy, self.look.get_width(), self.look.get_height())
-        ratio = self.rect.h / self.rect.w
-        scaled_width = screen.get_width() // 16
-        self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(ratio*scaled_width)))
-
-        # Update rect, which is changed due to scaling.
-        # The real posy of the bunny is derived from the posy of the ground (input)
-        self.rect = pygame.Rect(posx, posy-self.look.get_height(), self.look.get_width(), self.look.get_height())
-
-        # Has one of the defined values in "mov_lib"
+        # This will have only one of the values defined in "mov_lib"
         self.moving_dir = 0
 
     def SetMovingDirection(self, direction, start_movement):
@@ -219,39 +207,13 @@ class Bunny(pygame.sprite.Sprite):
         elif self.rect.y > screen.get_height() - self.rect.h:
             self.rect.y = screen.get_height() - self.rect.h
 
-class Ground(pygame.sprite.Sprite):
-    def __init__(self, posx, posy, screen):
-        pygame.sprite.Sprite.__init__(self) #call Sprite initializer
+class Ground(SpriteBase):
+    def __init__(self, look_image, scaling, posx, posy, screen):
+        SpriteBase.__init__(self, look_image, scaling, posx, posy, screen)
 
-        # Load bunny, it should be facing right by default
-        self.look = load_image(os.path.join(image_dir,"ground.png"))
-
-        # Scale the look of the bunny depending on the display resolution
-        self.rect = pygame.Rect(posx, posy, self.look.get_width(), self.look.get_height())
-        ratio = self.rect.h / self.rect.w
-        scaled_width = screen.get_width() // 10
-        self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(ratio*scaled_width)))
-
-        # Update rect, which is changed due to scaling.
-        # The real posy of the bunny is derived from the posy of the ground (input)
-        self.rect = pygame.Rect(posx, posy-self.look.get_height(), self.look.get_width(), self.look.get_height())
-
-class Block(pygame.sprite.Sprite):
-    def __init__(self, posx, posy, screen):
-        pygame.sprite.Sprite.__init__(self) #call Sprite initializer
-
-        # Load bunny, it should be facing right by default
-        self.look = load_image(os.path.join(image_dir,"block.png"))
-
-        # Scale the look of the bunny depending on the display resolution
-        self.rect = pygame.Rect(posx, posy, self.look.get_width(), self.look.get_height())
-        ratio = self.rect.h / self.rect.w
-        scaled_width = screen.get_width() // 10
-        self.look = pygame.transform.smoothscale(self.look, (scaled_width,int(ratio*scaled_width)))
-
-        # Update rect, which is changed due to scaling.
-        # The real posy of the bunny is derived from the posy of the ground (input)
-        self.rect = pygame.Rect(posx, posy-self.look.get_height(), self.look.get_width(), self.look.get_height())
+class Block(SpriteBase):
+    def __init__(self, look_image, scaling, posx, posy, screen):
+        SpriteBase.__init__(self, look_image, scaling, posx, posy, screen)
 
 class GameScene(SceneBase):
     def __init__(self, screen, active_scene=None):
@@ -260,30 +222,36 @@ class GameScene(SceneBase):
 
         pygame.mouse.set_visible(False)
 
-        # Create ground from small ground elements
+        # Delay for sending the second KEYDOWN event when helding keys down, and the
+        # interval for sending all others. Both in msec
+        # pygame.key.set_repeat(100,100)
+
+        # Create ground from small ground elements, which fill up the width of
+        # the whole screen
         self.ground_list = []
         self.ground_cnt = 10
-
+        # The x coordinate is increased after creating each ground element, so
+        # they will be next to each other
         ground_x = 0
-        ground_y = screen.get_height()
         for i in range(self.ground_cnt):
-            self.ground_list.append(Ground(ground_x, ground_y, screen))
+            self.ground_list.append(Ground("ground.png", self.ground_cnt,
+                                    ground_x, screen.get_height(), screen))
             ground_x += self.ground_list[-1].rect.w
 
-        # Create a bunny
-        self.block = Block(screen.get_width() // 2,
+        # Create a block
+        self.block = Block("block.png", 10, screen.get_width() // 2,
                            self.ground_list[0].rect.y,
                            screen)
 
         # Create a bunny
-        self.bunny = Bunny(screen.get_width() // 20,
+        self.bunny = Bunny("bunny_look.png", 16, screen.get_width() // 20,
                            self.ground_list[0].rect.y,
                            screen)
 
-        self.allsprites = pygame.sprite.Group(self.ground_list, self.block)
+        self.all_blocking = pygame.sprite.Group(self.ground_list, self.block)
 
     def CheckCollision(self, A):
-        for cur_sprite in self.allsprites:
+        for cur_sprite in self.all_blocking:
             B = cur_sprite.rect
             if (A.x < B.x + B.w) and (A.x + A.w > B.x) and \
                (A.y < B.y + B.h) and (A.y + A.h > B.y):
