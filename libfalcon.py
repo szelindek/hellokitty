@@ -84,11 +84,8 @@ mov_lib = {
     "left":  1,
     "up":    2,
     "right": 4,
-    "down":  8,
     "upleft":    3,
-    "upright":   6,
-    "downleft":  9,
-    "downright": 12
+    "upright":   6
 }
 
 mov_lib_r = inverse_dict(mov_lib)
@@ -96,8 +93,7 @@ mov_lib_r = inverse_dict(mov_lib)
 key_lib = {
     "left":  pygame.K_LEFT,
     "right": pygame.K_RIGHT,
-    "up":    pygame.K_UP,
-    "down":  pygame.K_DOWN
+    "up":    pygame.K_UP
 }
 
 key_lib_r = inverse_dict(key_lib)

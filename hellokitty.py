@@ -38,7 +38,6 @@ if (A.x - B.x)*(A.x - B.x) + (A.y - B.y)*(A.y - B.y) < (A.r + B.r)*(A.r + B.r):
     # Collision!
 
 TEST:
-    left HOLD, right HOLD, left RELEASE -> won't move right -> generate multiple keydown events when pressed?
     Fix windowed menu position (for quitscene)
     adjust bunny rect to be pixel-precise
     check block rect and the gap between bunny and block
@@ -167,12 +166,16 @@ class Bunny(SpriteBase):
 
         # Move 1/200 of the screen in each frame -> this is speed (pixel/frame)
         self.move_step = screen.get_width() // 200
+        self.jump_step = 2
+        self.gravity = 1
 
         # Bunny should be facing right by default
         self.facing_right = True
 
         # This will have only one of the values defined in "mov_lib"
         self.moving_dir = 0
+
+        self.jumping = False
 
     def SetMovingDirection(self, direction, start_movement):
         """Map pressed keys to a bitfield, to determine movement direction"""
@@ -183,15 +186,14 @@ class Bunny(SpriteBase):
             if (self.moving_dir & ~direction) in mov_lib_r:
                 self.moving_dir &= ~direction
 
-    def UpdateCoordinates(self, posx_delta, posy_delta, update_facing_dir=False):
+    def UpdateCoordinates(self, posx_delta, posy_delta):
         """Change coordinates of the bunny, update the direction it's facing"""
         self.rect.x += posx_delta
         self.rect.y += posy_delta
 
         # If moving left but facing right, or moving right but facing left,
         # then flip the bunny look, to face in the direction of the movement
-        if update_facing_dir and \
-           (posx_delta < 0 and self.facing_right == True) or \
+        if (posx_delta < 0 and self.facing_right == True) or \
            (posx_delta > 0 and self.facing_right == False):
             self.look = pygame.transform.flip(self.look, True, False)
             self.facing_right = not self.facing_right
@@ -224,7 +226,7 @@ class GameScene(SceneBase):
 
         # Delay for sending the second KEYDOWN event when helding keys down, and the
         # interval for sending all others. Both in msec
-        # pygame.key.set_repeat(100,100)
+        pygame.key.set_repeat(50,50)
 
         # Create ground from small ground elements, which fill up the width of
         # the whole screen
@@ -250,14 +252,6 @@ class GameScene(SceneBase):
 
         self.all_blocking = pygame.sprite.Group(self.ground_list, self.block)
 
-    def CheckCollision(self, A):
-        for cur_sprite in self.all_blocking:
-            B = cur_sprite.rect
-            if (A.x < B.x + B.w) and (A.x + A.w > B.x) and \
-               (A.y < B.y + B.h) and (A.y + A.h > B.y):
-                return True
-        return False
-
     def ProcessInput(self, screen, events, pressed_keys):
         for event in events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -269,6 +263,14 @@ class GameScene(SceneBase):
                 self.bunny.SetMovingDirection(mov_lib[key_lib_r[event.key]],False)
 
         return self.__class__.__name__
+
+    def IsColliding(self, A):
+        for cur_sprite in self.all_blocking:
+            B = cur_sprite.rect
+            if (A.x < B.x + B.w) and (A.x + A.w > B.x) and \
+               (A.y < B.y + B.h) and (A.y + A.h > B.y):
+                return True
+        return False
 
     def Update(self, screen):
         # Update the position of the bunny based on the pressed keys
@@ -282,21 +284,34 @@ class GameScene(SceneBase):
                 A = self.bunny.rect
                 # Move the bunny in the desired direction only if there's no collision
                 if "left" == mov_lib_r[direction] and \
-                   not self.CheckCollision(pygame.Rect(A.x-self.bunny.move_step,A.y,A.w,A.h)):
-                    self.bunny.UpdateCoordinates(-self.bunny.move_step,0,True)
+                  not self.IsColliding(pygame.Rect(A.x-self.bunny.move_step,A.y,A.w,A.h)):
+                    self.bunny.UpdateCoordinates(-self.bunny.move_step,0)
                 elif "right" == mov_lib_r[direction] and \
-                   not self.CheckCollision(pygame.Rect(A.x+self.bunny.move_step,A.y,A.w,A.h)):
-                    self.bunny.UpdateCoordinates(self.bunny.move_step,0,True)
-                elif "up" == mov_lib_r[direction] and \
-                   not self.CheckCollision(pygame.Rect(A.x,A.y-self.bunny.move_step,A.w,A.h)):
-                    self.bunny.UpdateCoordinates(0,-self.bunny.move_step,True)
-                elif "down" == mov_lib_r[direction] and \
-                   not self.CheckCollision(pygame.Rect(A.x,A.y+self.bunny.move_step,A.w,A.h)):
-                    self.bunny.UpdateCoordinates(0,self.bunny.move_step,True)
+                  not self.IsColliding(pygame.Rect(A.x+self.bunny.move_step,A.y,A.w,A.h)):
+                    self.bunny.UpdateCoordinates(self.bunny.move_step,0)
+                elif "up" == mov_lib_r[direction]:
+                    self.bunny.jumping = True
+
+                    if not self.IsColliding(pygame.Rect(A.x,A.y-self.bunny.jump_step,A.w,A.h)):
+                        self.bunny.UpdateCoordinates(0,-self.bunny.jump_step)
+
             pow_2 += 1
             tmp = tmp // 2
+
+        if self.bunny.jumping:
+            # Short alias to rectangle of the bunny
+            A = self.bunny.rect
+
+            if self.IsColliding(pygame.Rect(A.x,A.y+self.bunny.gravity,A.w,A.h)):
+                self.bunny.jumping = False
+
+            self.bunny.UpdateCoordinates(0, self.bunny.gravity)
+
         # Check the position on both axles
         self.bunny.ForceBoundaries(screen)
+
+        print("Jumping: ", self.bunny.jumping)
+
 
     def GenerateOutput(self, screen):
         self.Update(screen)
