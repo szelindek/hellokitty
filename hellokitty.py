@@ -62,7 +62,7 @@ _option_items   = (("Resolution", "ChangeResolution"), ("Fullscreen", "ToggleFul
 _quit_headers   = ("Do you really want to", "leave the bunny alone?")
 _quit_items     = (("Yes! I am a bad person...", ""), ("No, of course not!", "TitleScene"))
 
-_resolutions = ((640,360),(960,540))
+_resolutions = ((640,360),(960,540),(1280,720))
 # Index of the active res from _resolutions
 _active_res = 0
 # Constant value to set fullscreen mode via display.set_mode
@@ -165,9 +165,9 @@ class Bunny(SpriteBase):
         SpriteBase.__init__(self, look_image, scaling, posx, posy, screen)
 
         # Move 1/200 of the screen in each frame -> this is speed (pixel/frame)
-        self.move_step = screen.get_width() // 200
-        self.jump_step = 2
-        self.gravity = 1
+        self.move_step = screen.get_width() // 180
+        self.jump_step = screen.get_width() // 90
+        self.gravity = screen.get_width() // 180
 
         # Bunny should be facing right by default
         self.facing_right = True
@@ -298,20 +298,15 @@ class GameScene(SceneBase):
             pow_2 += 1
             tmp = tmp // 2
 
-        if self.bunny.jumping:
-            # Short alias to rectangle of the bunny
-            A = self.bunny.rect
-
-            if self.IsColliding(pygame.Rect(A.x,A.y+self.bunny.gravity,A.w,A.h)):
-                self.bunny.jumping = False
-
+        # Short alias to rectangle of the bunny
+        A = self.bunny.rect
+        if self.IsColliding(pygame.Rect(A.x,A.y+self.bunny.gravity,A.w,A.h)):
+            self.bunny.jumping = False
+        else:
             self.bunny.UpdateCoordinates(0, self.bunny.gravity)
 
         # Check the position on both axles
         self.bunny.ForceBoundaries(screen)
-
-        print("Jumping: ", self.bunny.jumping)
-
 
     def GenerateOutput(self, screen):
         self.Update(screen)
